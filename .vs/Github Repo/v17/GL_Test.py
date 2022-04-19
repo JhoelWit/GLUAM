@@ -35,41 +35,56 @@ pads_in_channels = pad_features.shape[1]
 vtols_in_channels = vtol_features.shape[1]
 print('pads have',pads_in_channels,'inputs')
 print('vtols have',vtols_in_channels,'inputs')
-hidden_channels = 15
+hidden_channels = 150
 out_channels = 64
 pads = GCN(pads_in_channels,hidden_channels,out_channels)
 vtols = GCN(vtols_in_channels,hidden_channels,out_channels)
 
 #Trying out forward propogation and basic encoding
 
-vtol_basic_connect = np.matrix([
-    [0,1,1,1,1],
-    [1,0,1,1,1]])
-pads_basic_connect = np.matrix([
-    [0,1,1],
-    [1,0,1]])
+vtol_edge_index = torch.tensor([[0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
+                                [1, 2, 3, 4, 0, 2, 3, 4, 0, 1, 3, 4, 0, 1, 2, 4, 0, 1, 2, 3]],
+                                dtype=torch.long)
+pad_edge_index = torch.tensor([[0, 0, 1, 1, 2, 2],
+                               [1, 2, 0, 2, 0, 1]],
+                               dtype=torch.long)
 
-tvtol_edge = torch.tensor(vtol_edge,dtype=torch.long)
-tpad_edge = torch.tensor(pad_edge,dtype=torch.long)
+
+# tvtol_edge = torch.tensor(vtol_edge,dtype=torch.long)
+# tpad_edge = torch.tensor(pad_edge,dtype=torch.long)
 
 tvtol_features = torch.tensor(vtol_features,dtype=torch.float)
 tpad_features = torch.tensor(pad_features,dtype=torch.float)
 
-tvtol_basic_connect = torch.tensor(vtol_basic_connect,dtype=torch.long)
-tpads_basic_connect = torch.tensor(pads_basic_connect,dtype=torch.long)
-
-pad_x = pads.forward(tpad_features,tpads_basic_connect)
-vtol_x = vtols.forward(tvtol_features,tvtol_basic_connect)
+pad_x = pads.forward(tpad_features,pad_edge_index)
+vtol_x = vtols.forward(tvtol_features,vtol_edge_index)
 
 print('\npad feature vector: \n',pad_x)
 print('\nvtol feature vector: \n',vtol_x)
 
 #MLP test
+ypred_vtol = [[] for vtol in range(vtols_in_channels)]
+num_actions = 7
 final_features = torch.cat((pad_x.flatten(),vtol_x.flatten()))
-print('\n final feature vector:\n',final_features)
+print('\n final feature vector:\n',final_features,'\n length is',len(final_features))
 input_dim = len(final_features)
-output_dim = 7
-action_space = MLP(input_dim,output_dim)
-ypred = action_space.forward(final_features)
+output_dim = num_actions*vtols_in_channels
+with torch.no_grad():
+    action_space = MLP(input_dim,output_dim)
+    ypred = action_space.forward(final_features).numpy().reshape((vtols_in_channels,num_actions))
+    print('\nypred is:\n',ypred)
+    # ypred = torch.split(ypred,num_actions)
 
-print('\nypred is:\n',ypred)
+# for i in range(vtols_in_channels):
+#     ypred_vtol[i].append(ypred[i])
+
+actions_to_take = np.argmax(ypred,axis=1)
+for i in range(vtols_in_channels):
+    print('\nVtol',i,'will take action:',actions_to_take[i])
+
+# With Learnable Parameters
+m = torch.nn.BatchNorm1d(100)
+# Without Learnable Parameters
+m = torch.nn.BatchNorm1d(100, affine=False)
+input = torch.randn(20, 100)
+output = m(input)

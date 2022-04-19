@@ -1,7 +1,6 @@
-import torch
-from torch import nn
-from torch import Tensor
-from torch_geometric.nn import GCNConv
+from torch import nn,Tensor
+from torch.nn import BatchNorm1d
+from torch_geometric.nn import GCNConv, global_mean_pool,BatchNorm
 
 
 
@@ -10,12 +9,23 @@ class GCN(nn.Module):
         super().__init__()
         self.conv1 = GCNConv(in_channels, hidden_channels)
         self.conv2 = GCNConv(hidden_channels, out_channels)
+        self.Leaky_ReLU = nn.LeakyReLU(negative_slope=0.1)
+        self.BatchNorm = BatchNorm(in_channels,track_running_stats=True)
 
     def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
         # x: Feature matrix of shape [num_nodes, in_channels]
         # edge_index: Graph connectivity matrix of shape [2, num_edge]
-        x = self.conv1(x, edge_index).relu()
+        x = self.BatchNorm(x)
+        x = self.conv1(x, edge_index)
+        x = self.Leaky_ReLU(x)
         x = self.conv2(x, edge_index)
+        # print('x without pooling',x)
+
+        #Pooling for the graph embedding
+
+        x = global_mean_pool(x,batch=None)
+
+        # print('\n x with pooling',x)
         return x
 
 class MLP(nn.Module):
@@ -27,17 +37,22 @@ class MLP(nn.Module):
         self.input = nn.Linear(input_dim,hidden1)
         self.hidden = nn.Linear(hidden1,hidden2)
         self.output = nn.Linear(hidden2,output_dim)
+        self.Leaky_ReLU = nn.LeakyReLU(negative_slope=0.1)
 
     def forward(self, x):
 
         #x should be (input_dim,-1)
         # batch_size = x.shape[0]
         # x = x.view(batch_size,-1)
-
+ 
         #Forward propogation
-        h1 = self.input(x).relu()
-        h2 = self.hidden(h1).relu()
-        ypred = self.output(h2)
+        h1 = self.input(x)
+        l1 = self.Leaky_ReLU(h1)
+
+        h2 = self.hidden(l1)
+        l2 = self.Leaky_ReLU(h2)
+
+        ypred = self.output(l2).tanh()
 
         return ypred
 
