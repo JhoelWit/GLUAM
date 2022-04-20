@@ -40,6 +40,14 @@ out_channels = 64
 pads = GCN(pads_in_channels,hidden_channels,out_channels)
 vtols = GCN(vtols_in_channels,hidden_channels,out_channels)
 
+
+test_pad_edge = pads.create_edge_connect(num_nodes=3)
+adj_test_pad_edge = pads.create_edge_connect(adj_mat=pad_edge,direct_connect=1)
+test_vtol_edge = vtols.create_edge_connect(num_nodes=5)
+adj_test_vtol_edge = vtols.create_edge_connect(adj_mat=vtol_edge,direct_connect=1)
+print('Test_pad_edge\n',test_pad_edge,'\nadj mat Test_pad_edge\n',adj_test_pad_edge,'\nTest_vtol_edge\n',test_vtol_edge,'\nadj_Test_vtol_edge\n',adj_test_vtol_edge)
+
+
 #Trying out forward propogation and basic encoding
 
 vtol_edge_index = torch.tensor([[0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
