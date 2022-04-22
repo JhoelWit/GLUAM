@@ -6,5 +6,3 @@ procs = [subprocess.Popen(i) for i in commands]
 for p in procs:
     p.wait() #Will start all and wait for the first one to close until all are closed.
 
-
-
