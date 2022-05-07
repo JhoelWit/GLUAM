@@ -37,10 +37,11 @@ class StateManager:
 
         """
         states = list()
+        drone_locs = drone.drone_locs
         battery_capacity = drone.get_battery_state()
-        empty_port = self.ports.get_availability_ports()                        #need another way to get all drone locs
-        empty_hovering_spots = self.ports.get_availability_hover_spots()        #need another way to get all drone locs
-        empty_battery_ports = self.ports.get_availability_battery_ports()       #need another way###
+        empty_port = self.ports.get_availability_ports(drone_locs)                        #need another way to get all drone locs
+        empty_hovering_spots = self.ports.get_availability_hover_spots(drone_locs)        #need another way to get all drone locs
+        empty_battery_ports = self.ports.get_availability_battery_ports(drone_locs)       #need another way###
         status = drone.get_status()
         schedule = drone.get_schedule_state()
         states = [battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status, schedule ]

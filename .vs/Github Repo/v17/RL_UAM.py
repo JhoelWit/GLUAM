@@ -6,7 +6,7 @@ Created on Sat Mar  25 12:51:19 2022
 """
 
 
-import setup_path 
+# import setup_path 
 import airsim
 import numpy as np
 import os

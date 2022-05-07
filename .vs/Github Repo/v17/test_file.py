@@ -10,4 +10,5 @@ import gym
 
 
 env = environment(4)
-env.step(2)
+new_state,reward,done,info = env.step(2)
+print('State\n',new_state,'\nreward\n',reward,'\ndone\n',done,'\ninfo\n',info)

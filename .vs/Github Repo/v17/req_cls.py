@@ -6,8 +6,7 @@ Created on Sat Apr 19 12:51:19 2022
 """
 import random
 import math 
-
-
+import numpy as np
 
 class ports:
     def __init__(self,drone_count):
@@ -19,7 +18,7 @@ class ports:
         self.no_battery_ports = len(self.battery_ports)
         self.no_hoverspots = len(self.hover_spots)
         self.port_status = {}
-        self.port_center_loc =[]
+        self.port_center_loc =[0,0,-4] #Filler
         self.drone_count = drone_count
         self.dist_threshold = 10
         for i in range(self.no_ports):
@@ -75,14 +74,20 @@ class ports:
     def get_count_empty_hover_Spot(self):
         cnt = 0
         for i in range(self.no_hoverspots):
-            if self.port_status[i]["occupied"] == False:
-                cnt+=1
+            # print('i is',i)
+            # print('port statuses\n',self.port_status[0]['occupied'])
+            try:
+                if self.port_status[i]["occupied"] == False:
+                    cnt+=1
+            except:
+                print('could not access port',i)
         return cnt   
     
     def get_availability_ports(self,drone_locs):
         empty_ports = self.get_count_empty_port()
         uams_inside = self.count_uavs_inside(drone_locs)
         percent = empty_ports/uams_inside
+        print('percent',percent)
         if percent > 0.8:
             return 2
         elif percent> 0.5:
@@ -113,7 +118,7 @@ class ports:
         else:
             return 0
     
-    def port_status(self):
+    def get_port_status(self): #Changed from port_status to avoid key errors
         pass
     
     def get_destination(self):
@@ -124,12 +129,16 @@ class ports:
         UAVs_inside = 0
         for i in range(len(drone_locs)):
             dist= self._calculate_distance(drone_locs[i])
-            if dist>self.dist_threshold:
+            print('distance',dist)
+            if dist<self.dist_threshold: #Switched from > to <
                 UAVs_inside +=1
         return UAVs_inside
     
     def _calculate_distance(self,cur_location):
-        return math.dist(self.port_center_loc, cur_location)
+        # return math.dist(self.port_center_loc, cur_location)
+        print(self.port_center_loc)
+        print(cur_location)
+        return np.linalg.norm(np.array(self.port_center_loc)-np.array(cur_location)) #math.dist starts at python3.8, I'm using 3.7 lol
     
     
 
@@ -147,8 +156,9 @@ class UAMs:
         self.offset = offset
         self.current_location = []
         self.in_portzone = False
-        self.port_center_loc =[]
+        self.port_center_loc =[0,0,-4] #Filler
         self.dist_threshold = 10
+        self.drone_locs = [[0,0,-1],[6,0,-1],[4,4,-1],[6,4,-1]]
     
     def get_status(self):
         return self.status
@@ -171,6 +181,9 @@ class UAMs:
     def distance_to_nearest_drone(self, drone_no):
         #we can use it later
         pass
+
+    def to_msgpack(self):
+        print('band-aid fix')
     
     def check_zone(self):
         dist = self._calculate_distance(self.current_location)

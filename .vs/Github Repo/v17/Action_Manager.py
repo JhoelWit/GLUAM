@@ -72,7 +72,8 @@ class ActionManager:
     def get_final_pos(self,port, offset):
         # [x1,y1] , [x2, y2]
         #return [x1+x2, y1+y2]
-        pass
+        return [port[0] + offset[0] , port[1] + offset[1], port[2]]
+        
     
     
 """
@@ -81,7 +82,7 @@ LAnding
 1.1 stay still - 0
 1.2 land in empty port - 1
 1.3 land in battery port - 2
-1.4 move to empty hovering spot – 3
+1.4 move to empty hovering spot - 3
 
 Takeoff
 2.1 stay still - 0

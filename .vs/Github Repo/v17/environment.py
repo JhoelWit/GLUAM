@@ -26,6 +26,7 @@ class environment(gym.Env):
     def _initialise(self):
         self.port = ports(self.no_drones)
         self.client = airsim.MultirotorClient()
+        self.enable_control()
         for i in range(self.no_drones):
             drone_name = "Drone"+str(i)
             offset = self.drone_offsets[i]
@@ -39,6 +40,7 @@ class environment(gym.Env):
         
     def step(self,action):
         coded_action = self.action_manager.action_decode(self.current_drone, action)
+        print('coded action\n',coded_action)
         if coded_action["action"] == "land":
             new_position = coded_action["position"]
             self.complete_landing(self.current_drone, new_position)
@@ -46,7 +48,7 @@ class environment(gym.Env):
         elif coded_action["action"] == "takeoff":
             new_position = coded_action["position"]
             self.complete_takeoff(self.drone_name, new_position)
-            #need to calculate reward nut how
+            #need to calculate reward but how
         else:
             pass
         reward = self.calculate_reward()
@@ -62,20 +64,34 @@ class environment(gym.Env):
         
         
     def move_position(self, drone_name, position):
-        self.client.moveToPositionAsync(position[0],position[1],position[2], 1, vehicle_name=drone_name)
+        print('drone name',drone_name,'position',position)
+        self.client.moveToPositionAsync(position[0],position[1],position[2], velocity=1, vehicle_name=drone_name)
     
     def complete_landing(self, drone_name, location):
         self.move_position(drone_name, location )        
         self.client.landAsync(vehicle_name=drone_name)
         
     def select_next_drone(self):
-        cur_drone = copy(self.current_drone)
-        current_drone_no = int(cur_drone[1])
+        print('current drone',self.current_drone)
+        cur_drone = copy.copy(self.current_drone) #Use copy.copy or copy.deepcopy depending on what you want to transfer, neither work for indexing on the next line though.
+        current_drone_no = self.all_drones.index(self.current_drone)
+        print('current drone no',current_drone_no)
+        # current_drone_no = int(cur_drone[1])
         new_drone = current_drone_no + 1
         self.current_drone = self.all_drones[new_drone]
     
+    def enable_control(self):
+        self.client.enableApiControl(True, "Drone1")
+        self.client.enableApiControl(True, "Drone2")
+        self.client.enableApiControl(True, "Drone3")
+        # self.client.enableApiControl(True, "Drone4")
+        self.client.armDisarm(True, "Drone1")
+        self.client.armDisarm(True, "Drone2")
+        self.client.armDisarm(True, "Drone3")
+        # self.client.armDisarm(True, "Drone4")
+    
     def _get_obs(self):
-        states = self.state_manager(self.current_drone)
+        states = self.state_manager.get_obs(self.current_drone)
         return states
     
     def calculate_reward(self):

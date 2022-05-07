@@ -1,0 +1,420 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Apr 19 12:51:19 2022
+
+@author: ADAMS-LAB
+"""
+import random
+import math 
+import numpy as np
+
+class ports:
+    """
+    A class which has details about all the port locations.
+    """
+    def __init__(self,drone_count):
+        self.normal_ports = [[0,0, -2], [-3,0,-2]]
+        self.fake_ports = [[0,3,0], [-11,1,0], [-8,6,0], [-8,-5,0], [-12,8,0]] #These are closer
+        self.hover_spots = [[-1,-9,0], [-9,-9,0],[-15,0,0], [-5,10,0], [-8,10,0], [-2,4,0],[-5,-9,0]]
+        self.battery_ports = [[-2,3,-2]]
+        self.no_ports = len(self.normal_ports)
+        self.no_battery_ports = len(self.battery_ports)
+        self.no_hoverspots = len(self.hover_spots)
+        self.no_total = self.no_ports + self.no_battery_ports + self.no_hoverspots
+        self.feature_mat = np.zeros((self.no_total,2)) #two features per port
+        self.port_status = {}
+        self.port_center_loc =[0,0,-4] #Filler
+        self.drone_count = drone_count
+        self.dist_threshold = 10
+        for i in range(self.no_ports):
+            self.port_status[i] = {"port_no": i, "position":self.normal_ports[i],"occupied": False}
+        self.battery_port_status = {}
+        for i in range(self.no_battery_ports):
+            self.battery_port_status[i] = {"port_no": i,"position":self.battery_ports[i],"occupied": False}
+        self.hover_spot_status = {}
+        for i in range(self.no_hoverspots):
+            self.hover_spot_status[i] = {"port_no": i,"position":self.hover_spots[i],"occupied": False}
+        #populating main dict with all port locations
+            
+    def update_port(self,port):
+        if port:
+            if port['type'] == 'normal':
+                # print('\nport relinquished\n')
+                self.change_status_normal_port(port['port_no'],False)
+            elif port['type'] == 'battery':
+                # print('\nbattery relinquished\n')
+                self.change_status_battery_port(port['port_no'],False)
+            elif port['type'] == 'hover':
+                # print('\nhover port relinquished\n')
+                self.change_hover_spot_status(port['port_no'],False)
+
+    def update_all(self):
+        '''''
+        This function will iterate through all ports, battery ports, and hover spots and 
+        update the vertiport feature matrix accordingly
+        '''''
+        for i in range(self.no_ports):
+            time_int = 0
+            ev = 0
+            if self.port_status[i]['occupied'] == True:
+                availability = 0
+            else:
+                availability = 1
+            node_type = 0
+            self.feature_mat[i] = [availability,node_type]
+        for i in range(self.no_battery_ports):
+            time_int = 0
+            ev = 0
+            if self.battery_port_status[i]['occupied'] == True:
+                availability = 0
+            else:
+                availability = 1
+            node_type = 1
+            self.feature_mat[i+self.no_ports] = [availability,node_type]
+        for i in range(self.no_hoverspots):
+            time_int = 0
+            ev = 0
+            if self.hover_spot_status[i]['occupied'] == True:
+                availability = 0
+            else:
+                availability = 1
+            node_type = 2
+            self.feature_mat[i+self.no_ports+self.no_battery_ports] = [availability,node_type]
+            
+    def get_empty_port(self):
+        for i in range(self.no_ports):
+            if self.port_status[i]["occupied"] == False:
+                self.change_status_normal_port(self.port_status[i]['port_no'],True)
+                return self.port_status[i]
+    
+    def get_empty_battery_port(self):
+        for i in range(self.no_battery_ports):
+            if self.battery_port_status[i]["occupied"] == False:
+                self.change_status_battery_port(self.battery_port_status[i]['port_no'],True)
+                return self.battery_port_status[i]
+        return None
+    
+    def get_empty_hover_status(self):
+        for i in range(self.no_hoverspots):
+            if self.hover_spot_status[i]["occupied"] == False:
+                self.change_hover_spot_status(self.hover_spot_status[i]['port_no'],True)
+                return self.hover_spot_status[i]
+
+    def get_destination(self,choice = 0):
+        if choice == 0:
+            return random.choice(self.fake_ports)
+        else:
+            empty_port = self.get_empty_hover_status()
+            return empty_port['position']
+
+    def change_status_normal_port(self, port_no, occupied):
+        self.port_status[port_no]["occupied"] = occupied
+        
+    def change_status_battery_port(self, port_no, occupied):
+        self.battery_port_status[port_no]["occupied"] = occupied
+    
+    def change_hover_spot_status(self, port_no, occupied):
+        self.hover_spot_status[port_no]["occupied"] = occupied
+            
+    def get_count_empty_port(self):
+        cnt = 0
+        for i in range(self.no_ports):
+            if self.port_status[i]["occupied"] == False:
+                cnt+=1
+        return cnt
+    
+    def get_count_empty_battery_port(self):
+        cnt = 0
+        for i in range(self.no_battery_ports):
+            if self.port_status[i]["occupied"] == False:
+                cnt+=1
+        return cnt
+    
+    def get_count_empty_hover_Spot(self):
+        cnt = 0
+        for i in range(self.no_hoverspots):
+            if self.hover_spot_status[i]["occupied"] == False:
+                cnt+=1
+
+        return cnt   
+    
+    def get_availability_ports(self,drone_locs):
+        empty_ports = self.get_count_empty_port()
+        uams_inside = self.count_uavs_inside(drone_locs)
+        percent = empty_ports/uams_inside
+        if uams_inside > 0:
+            percent = empty_ports/uams_inside
+            if percent > 0.8:
+                return 2
+            elif percent> 0.5:
+                return 1
+            else:
+                return 0
+        else:
+            return 2
+
+
+    def get_availability_battery_ports(self,drone_locs):
+        empty_ports = self.get_count_empty_battery_port()
+        uams_inside = self.count_uavs_inside(drone_locs)
+        if uams_inside > 0:
+            percent = empty_ports/uams_inside
+            if percent > 0.8:
+                return 2
+            elif percent> 0.5:
+                return 1
+            else:
+                return 0
+        else:
+            return 2
+        
+    def get_availability_hover_spots(self,drone_locs):
+        empty_ports = self.get_count_empty_hover_Spot()
+        uams_inside = self.count_uavs_inside(drone_locs)
+        percent = empty_ports/uams_inside
+        if uams_inside > 0:
+            percent = empty_ports/uams_inside
+            if percent > 0.8:
+                return 2
+            elif percent> 0.5:
+                return 1
+            else:
+                return 0
+        else:
+            return 2
+    
+    def get_port_status(self): #Changed from port_status to avoid key errors
+        pass
+    
+    def count_uavs_inside(self,drone_locs):
+        UAVs_inside = 0
+        for i in range(len(drone_locs)):
+            dist= self._calculate_distance(drone_locs[i])
+            if dist<self.dist_threshold: #Switched from > to <
+                UAVs_inside +=1
+        return UAVs_inside
+    
+    def _calculate_distance(self,cur_location):
+
+        return np.linalg.norm(np.array(self.port_center_loc)-np.array(cur_location)) #math.dist starts at python3.8, I'm using 3.7 lol
+    
+    
+
+
+class UAMs:
+    def __init__(self, drone_name,offset):
+        self.drone_name = drone_name
+        self.drone_no = drone_name # use split and get the drone number alone
+        self.velocity = 1 # 1 m/s
+        self.all_battery_states = {'critical':0,'sufficient':1,'full':2} #Added 4.25.22 -> 3 different battery states to go with the overall battery remaining
+        self.battery_state = 2
+        self.battery_remaining = 100
+        self.distance_travelled = 0
+        self.next_takeoff = None
+        self.next_landing = None
+        self.all_states = {"in-air":0, "in-port":1, "battery-port":2, "in-action":3, "in-destination":4}
+        self.job_status = {"initial_loc":None, "final_dest":None, "current_pos": None}
+        self.status = 1
+        self.status_to_set = 1
+        self.offset = offset
+        self.current_location = []
+        self.in_portzone = False
+        self.port_center_loc =[0,0,-4] #Filler
+        self.dist_threshold = 10
+        self.drone_locs = [[0,0,-1],[6,0,-1],[4,4,-1],[6,4,-1],[-3,0,-1]]
+        self.current_location = None
+        self.in_battery_port = 0
+        self.port_identification = None
+        self.upcoming_schedule = {"landing-time": None, "takeoff-time":None, 'landing-delay': None,'takeoff-delay':None,'time':None}
+        self.env_time = 0
+
+    def get_status(self):
+        if self.status == self.all_states['in-air']:
+            status = 0
+        else:
+            status = 1
+        return status
+    
+    def set_status(self,status, final_status):
+        self.status = self.all_states[status]
+        self.status_to_set = self.all_states[final_status]
+    
+    def get_schedule_state(self):
+
+        if (self.upcoming_schedule['landing-time'] - 1) <= self.upcoming_schedule['time'] <= (self.upcoming_schedule['landing-time'] + 1):
+            schedule = 0
+        else:
+            schedule = 1
+        if (self.upcoming_schedule['takeoff-time'] - 1) <= self.upcoming_schedule['time'] <= (self.upcoming_schedule['takeoff-time'] + 1):
+            schedule = 0
+        else:
+            schedule = 1
+        return schedule 
+    
+    def set_schedule(self,whatever):
+        pass
+    
+    def get_battery_state(self):
+        return self.battery_state 
+    
+    def calculate_reduction(self,old_position,new_position): 
+        discharge_rate = 0.25
+        time_travelled = np.linalg.norm(np.array(old_position)-np.array(new_position)) / self.velocity
+
+        return discharge_rate * time_travelled
+
+    def update_battery(self, reduce):
+        self.battery_remaining -= reduce
+        if self.battery_remaining == 100:
+            self.battery_state = self.all_battery_states['full']
+        elif 30 <= self.battery_remaining <= 100: #Added 4.25.22 
+            self.battery_state = self.all_battery_states['sufficient'] #Ditto
+        elif 0 <= self.battery_remaining <= 30:
+            self.battery_state = self.all_battery_states['critical'] #Ditto
+        
+        
+    def distance_to_nearest_drone(self, drone_no):
+        #we can use it later
+        pass
+
+
+    
+    def check_zone(self):
+        dist = self._calculate_distance(self.current_location)
+        if dist<self.dist_threshold:
+            self.in_portzone = True
+        else:
+            self.in_portzone = False
+    
+    def update(self, current_loc, client,port,env_time):
+        self.env_time = env_time
+        self.current_location = current_loc
+        if self.status == self.all_states['in-action']: 
+            if self.status_to_set == self.all_states['in-destination']: 
+                dist = self._calculate_distance(current_loc,self.job_status['final_dest'])
+                if dist < 5: #Drone reached destination and is ready for the next task
+                    # print(["status of ", self.drone_name ," changed from ", self.status ," to ", self.status_to_set])
+                    self.set_status('in-destination','in-action')
+                else:
+                    final_pos = self.job_status['final_dest']
+                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+                    # print(["status of ", self.drone_name ," should change from ", self.status ," to ", self.status_to_set, "current dist needed is", dist])
+
+            elif self.status_to_set == self.all_states['battery-port']:
+                dist = self._calculate_distance(current_loc,self.job_status['final_dest'])
+                if dist < 5: #Drone reached the battery port and is ready to charge
+                    client.landAsync(vehicle_name = self.drone_name)
+                    self.in_battery_port = 1
+                    # print(["status of ", self.drone_name ," changed from ", self.status ," to ", self.status_to_set])
+                    self.set_status('battery-port','in-action')
+                    self.battery_remaining += 40
+                    # print('battery remaining',self.battery_remaining)
+                else:
+                    final_pos = self.job_status['final_dest']
+                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+                    # print(["status of ", self.drone_name ," should change from ", self.status ," to ", self.status_to_set, "current dist needed is", dist])
+
+            elif self.status_to_set == self.all_states['in-air']:
+                dist = self._calculate_distance(current_loc,self.job_status['final_dest'])
+                if dist < 5: #Drone reached the hover spot and is ready for the next task
+                    client.hoverAsync(vehicle_name = self.drone_name)
+                    old_position = current_loc
+                    new_position = self.job_status['final_dest']
+                    reduce = self.calculate_reduction(old_position,new_position) #Ditto
+                    self.update_battery(reduce) #Ditto
+                    # print(["status of ", self.drone_name ," changed from ", self.status ," to ", self.status_to_set])
+                    self.set_status('in-air','in-action')
+                else:
+                    final_pos = self.job_status['final_dest']
+                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+                    # print(["status of ", self.drone_name ," should change from ", self.status ," to ", self.status_to_set, "current dist needed is", dist])
+            elif self.status_to_set == self.all_states['in-port']:
+                dist = self._calculate_distance(current_loc,self.job_status['final_dest'])
+                if dist < 5: #Drone reached destination and is ready for the next task
+                    # print(["status of ", self.drone_name ," changed from ", self.status ," to ", self.status_to_set])
+                    self.set_status('in-port','in-action')
+                else:
+                    final_pos = self.job_status['final_dest']
+                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+                    # print(["status of ", self.drone_name ," should change from ", self.status ," to ", self.status_to_set, "current dist needed is", dist])
+
+        elif self.status == self.all_states['battery-port']:
+            # print('drone',self.drone_name,' is charging')
+            if self.battery_remaining >= 100:
+                self.battery_remaining = 100
+                #self.assign_schedule(port,client,choice = 0)
+                self.set_status('battery-port','in-action')
+            else:
+                self.battery_remaining += 40
+                # print('battery remaining1',self.battery_remaining)
+
+        elif self.status == self.all_states['in-port']:
+           # self.assign_schedule(port,client,choice=0)
+            # client.takeoffAsync(vehicle_name=self.drone_name)
+            self.set_status('in-port','in-action')
+            # print('[ \n status of ', self.drone_name ,"should change from ", self.status ," to ", self.status_to_set,']')
+
+        elif self.status == self.all_states['in-air']:
+            # print('drone',self.drone_name,'is currently hovering! It''s ready for an action')
+            pass
+
+        elif self.status == self.all_states['in-destination']:
+            self.assign_schedule(port,client,choice=1) #Assigning a hover port
+            self.port_identification = {'type':'hover','port_no':port.hover_spots.index(self.job_status['final_dest'])}
+            des = self.job_status['final_dest']
+            final_pos = self.get_final_pos(des, self.offset)
+            client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+            self.set_status('in-action','in-air')
+            # print('drone',self.drone_name,'is moving')
+            # print(["status of ", self.drone_name ,"should changed from ", self.status ," to ", self.status_to_set])
+        
+    def _calculate_distance(self,cur_location, dest):
+        return np.linalg.norm(np.array(dest)-np.array(cur_location))
+    
+    def update_port(self, is_it):
+        self.in_battery_port = is_it
+        
+        
+    def get_final_pos(self,port, offset):
+        return [port[0] + offset[0] , port[1] + offset[1], port[2]]
+    
+    def assign_schedule(self,port,client,choice = 0):
+        """
+        Instead of the schedule class, everytime the drone reaches its destination(fake ports) I assign another schedule. 
+
+        Returns
+        -------
+        None.
+
+        """
+        self.job_status['final_dest'] = port.get_destination(choice)
+        random_landing = random.randint(1,4) * 20
+        random_takeoff = random.randint(1,4) * 20
+        self.upcoming_schedule["landing-time"] = random_landing + self.env_time
+        self.upcoming_schedule["takeoff-time"] = random_takeoff + self.env_time
+        # self.upcoming_schedule['landing-delay'] = None
+        # self.upcoming_schedule['takeoff-delay'] = None
+        # self.upcoming_schedule['time'] = client.getMultirotorState().timestamp 
+
+    def get_state_status(self):
+        """
+        Our state space(On-time to takeoff/land (0,1)) indicates the takeoff and landing time, delay. Please calculate them here
+        For perfect takeoff - you can have threshold of 1 minute. Create new variable, check its timing if it is good timing set it to 1 else 0
+        if there is delay just calculate them for the reward claculation
+        1. For landing the delay time is from the time mentioned in the self.upcoming_schedule["Landing-time"]
+        2. for takeoff the delay time is from the time mentioned in the self.upcoming_schedule["takeoff-time"]
+
+        Returns
+        -------
+        None.
+
+        """
+        if (self.upcoming_schedule["landing-time"] - 30 <= self.env_time <= self.upcoming_schedule["landing-time"]+30) or (self.upcoming_schedule["takeoff-time"] - 30 <= self.env_time <= self.upcoming_schedule["takeoff-time"]+30):
+            return 1
+        else:
+            return 0
+
+        
+    
+
+

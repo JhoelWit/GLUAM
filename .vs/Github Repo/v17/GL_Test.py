@@ -72,14 +72,15 @@ print('\nvtol feature vector: \n',vtol_x)
 
 #MLP test
 ypred_vtol = [[] for vtol in range(vtols_in_channels)]
-num_actions = 7
+num_actions = 8
+mask = np.array([1, 1, 1, 0, 0, 0, 0, 0,1, 1, 1, 0, 0, 0, 0, 0,1, 1, 1, 0, 0, 0, 0, 0,1, 1, 1, 0, 0, 0, 0, 0,1, 1, 1, 0, 0, 0, 0, 0,]) 
 final_features = torch.cat((pad_x.flatten(),vtol_x.flatten()))
 print('\n final feature vector:\n',final_features,'\n length is',len(final_features))
 input_dim = len(final_features)
 output_dim = num_actions*vtols_in_channels
 with torch.no_grad():
     action_space = MLP(input_dim,output_dim)
-    ypred = action_space.forward(final_features).numpy().reshape((vtols_in_channels,num_actions))
+    ypred = action_space.forward(final_features,mask=mask).numpy().reshape((vtols_in_channels,num_actions))
     print('\nypred is:\n',ypred)
     # ypred = torch.split(ypred,num_actions)
 

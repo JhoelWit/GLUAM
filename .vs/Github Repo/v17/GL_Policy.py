@@ -1,6 +1,7 @@
+from cmath import inf
 import string
 import numpy as np
-from torch import long, nn,Tensor,tensor
+from torch import long, nn,Tensor,tensor, bool
 from torch.nn import BatchNorm1d
 from torch_geometric.nn import GCNConv, global_mean_pool,BatchNorm
 
@@ -67,7 +68,7 @@ class MLP(nn.Module):
         self.output = nn.Linear(hidden2,output_dim)
         self.Leaky_ReLU = nn.LeakyReLU(negative_slope=0.1)
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
 
         #x should be (input_dim,-1)
         # batch_size = x.shape[0]
@@ -80,9 +81,19 @@ class MLP(nn.Module):
         h2 = self.hidden(l1)
         l2 = self.Leaky_ReLU(h2)
 
-        ypred = self.output(l2).tanh()
+        try:
+            print('mask found')
+            ypred = self.output(l2)
+            ypred[tensor(mask, dtype=bool)] = -inf
+            print('ypred',ypred)
+            return ypred.tanh()
+        except Exception as e:
+            print(e)
+            return self.output(l2).tanh()
 
-        return ypred
+
+
+        
 
 
 
