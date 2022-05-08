@@ -31,7 +31,7 @@ class CustomGLPolicy(BasePolicy):
                 use_sde: bool = False,
                 squash_output: bool = False,
                 ortho_init: bool = True,
-                features_dim = 134,
+                features_dim = 135,
                 features_extractor_kwargs: Optional[Dict[str, Any]] = None,
                 optimizer_class: Type[torch.optim.Optimizer] = torch.optim.Adam,
                 optimizer_kwargs: Optional[Dict[str, Any]] = None
@@ -69,10 +69,10 @@ class CustomGLPolicy(BasePolicy):
     def forward(self, obs, deterministic = False):
 
         distribution,values = self.get_distribution(obs)
-        print('distribution',distribution)
-        print('values',values)
+        # print('distribution',distribution)
+        # print('values',values)
         actions = distribution.get_actions(deterministic=True)
-        print('actions',actions)
+        # print('actions',actions)
         log_prob = distribution.log_prob(actions)
 
         return actions, values, log_prob
@@ -119,10 +119,10 @@ class GNNFeatureExtractor(nn.Module):
     def __init__(self): #This custom GNN receives the obs dict for the action log-probabilities
         super(GNNFeatureExtractor,self).__init__()
         verti_input_channels = 2
-        ev_input_channels = 3
+        ev_input_channels = 4
         hidden_channels = 150
         output_channels = 64 #length of each graph embedding
-        input_dim = 134 #length of feature vector for MLP
+        input_dim = 135 #length of feature vector for MLP
         output_dim = 4 #output action dimensions
         self.vertiport = GCN(verti_input_channels,hidden_channels,output_channels) #input channels, hidden channels, output channels
         self.evtols = GCN(ev_input_channels,hidden_channels,output_channels) #Input channels, hidden channels, output channels
@@ -136,17 +136,17 @@ class GNNFeatureExtractor(nn.Module):
         ev_edge = data['evtol_edge'][0].long()
         next_drone = data['next_drone_embedding']
 
-        print('verti_features',verti_features.shape,'\n','verti_edge',verti_edge.shape)
-        print('\n','ev_features',ev_features.shape,'\n','ev_edge',ev_edge.shape)
-        print('\n','next_drone',next_drone.shape)
+        # print('verti_features',verti_features.shape,'\n','verti_edge',verti_edge.shape)
+        # print('\n','ev_features',ev_features.shape,'\n','ev_edge',ev_edge.shape)
+        # print('\n','next_drone',next_drone.shape)
         verti_embed = self.vertiport(verti_features,verti_edge)
-        print('verti embed',verti_embed.shape)
+        # print('verti embed',verti_embed.shape)
         ev_embed = self.evtols(ev_features,ev_edge)
-        print('ev embed',ev_embed.shape)
+        # print('ev embed',ev_embed.shape)
         final_features = torch.cat((verti_embed,ev_embed,next_drone),dim=1)
-        print('length of final features',final_features.shape)
+        # print('length of final features',final_features.shape)
         output = self.output_space(final_features) #Testing how the custom feature extractor works
-        print('shape of output is',output.shape)
+        # print('shape of output is',output.shape)
         # output = output.reshape(output.shape[0],-1)
         # log_prob = torch.argmax(output,dim=1)
 

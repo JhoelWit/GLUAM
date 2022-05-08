@@ -43,8 +43,9 @@ class StateManager:
         empty_hovering_spots = self.ports.get_availability_hover_spots(drone_locs)        
         empty_battery_ports = self.ports.get_availability_battery_ports(drone_locs)       
         status = drone.get_status()
+        collision = drone.collision_status
         schedule = drone.get_state_status() 
-        states = np.array([battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,schedule])
+        states = np.array([battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,collision,schedule])
         if not graph_prop:
             return states
         else:

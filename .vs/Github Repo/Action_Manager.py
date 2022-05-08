@@ -40,7 +40,7 @@ class ActionManager:
             elif action ==1: #land
                 empty_port = self.port.get_empty_port()
                 if not empty_port:
-                    return {"position" : None, "action": "stay"}
+                    return {"position" : None, "action": "stay-penalty"} #Trying to add a penalty here instead of stay, to give termination criteria to the model
                 else:
                     self.port.change_status_normal_port(empty_port["port_no"], True)
                     final_pos = self.get_final_pos(empty_port["position"], drone.offset)
@@ -52,7 +52,7 @@ class ActionManager:
             elif action ==2: #land in bat
                 empty_port = self.port.get_empty_battery_port()
                 if not empty_port:
-                    return {"position" : None, "action": "stay"}
+                    return {"position" : None, "action": "stay-penalty"} #Trying to add a penalty here instead of stay, to give termination criteria to the model
                 else:
                     drone.in_battery_port = 1
                     final_pos = self.get_final_pos(empty_port["position"], drone.offset)
@@ -81,7 +81,7 @@ class ActionManager:
                     final_pos = self.get_final_pos(empty_port['position'],drone.offset)
                     self.port.update_port(drone.port_identification)
                     drone.port_identification = {'type':'hover','port_no':empty_port["port_no"]}
-                    return {'position':final_pos, 'action':'takeoff-hover'}
+                    return {'position':final_pos, 'action':'takeoff-hover'} #Trying to add a penalty here instead of takeoff-hover, to give termination criteria to the model
                 else:
                     final_pos = self.get_final_pos(empty_port["position"], drone.offset)
                     self.port.update_port(drone.port_identification)
@@ -94,14 +94,23 @@ class ActionManager:
                     final_pos = self.get_final_pos(empty_port['position'],drone.offset)
                     self.port.update_port(drone.port_identification)
                     drone.port_identification = {'type':'hover','port_no':empty_port["port_no"]}
-                    return {'position':final_pos, 'action':'takeoff-hover'}
+                    return {'position':final_pos, 'action':'takeoff-hover'} #Trying to add a penalty here instead of takeoff-hover, to give termination criteria to the model
                 else:
                     final_pos = self.get_final_pos(empty_port["position"], drone.offset)
                     self.port.update_port(drone.port_identification)
                     drone.port_identification = {'type':'normal','port_no':empty_port["port_no"]}
                     drone.in_battery_port = 0
                     return {"position" : final_pos, "action": "move"}
-        return {'action':'continue'} # In the case that step is called while a robot is in-action
+        elif status == drone.all_states['in-action']:
+            if action == 0: #Stay on path
+                return {'action':'continue'}
+            elif action == 1: #Deviate from path
+                return {'action':'deviate'}
+            else: #Any other action should give a penalty while drone is in action
+                return {'action':'reward-penalty'}
+
+
+
     
     def get_final_pos(self,port, offset):
         return [port[0] + offset[0] , port[1] + offset[1], port[2]]

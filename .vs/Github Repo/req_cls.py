@@ -140,48 +140,38 @@ class ports:
     
     def get_availability_ports(self,drone_locs):
         empty_ports = self.get_count_empty_port()
-        uams_inside = self.count_uavs_inside(drone_locs)
-        percent = empty_ports/uams_inside
-        if uams_inside > 0:
-            percent = empty_ports/uams_inside
-            if percent > 0.8:
-                return 2
-            elif percent> 0.5:
-                return 1
-            else:
-                return 0
-        else:
+        percent = empty_ports / self.no_ports
+        # uams_inside = self.count_uavs_inside(drone_locs)
+        if percent >= 0.8:
             return 2
+        elif percent >= 0.5:
+            return 1
+        else:
+            return 0
 
 
     def get_availability_battery_ports(self,drone_locs):
         empty_ports = self.get_count_empty_battery_port()
-        uams_inside = self.count_uavs_inside(drone_locs)
-        if uams_inside > 0:
-            percent = empty_ports/uams_inside
-            if percent > 0.8:
-                return 2
-            elif percent> 0.5:
-                return 1
-            else:
-                return 0
-        else:
+        # uams_inside = self.count_uavs_inside(drone_locs)
+        percent = empty_ports / self.no_battery_ports
+        if percent >= 0.8:
             return 2
-        
+        elif percent >= 0.5:
+            return 1
+        else:
+            return 0
+       
     def get_availability_hover_spots(self,drone_locs):
         empty_ports = self.get_count_empty_hover_Spot()
-        uams_inside = self.count_uavs_inside(drone_locs)
-        percent = empty_ports/uams_inside
-        if uams_inside > 0:
-            percent = empty_ports/uams_inside
-            if percent > 0.8:
-                return 2
-            elif percent> 0.5:
-                return 1
-            else:
-                return 0
-        else:
+        # uams_inside = self.count_uavs_inside(drone_locs)
+        percent = empty_ports / self.no_hoverspots
+        if percent >= 0.8:
             return 2
+        elif percent >= 0.5:
+            return 1
+        else:
+            return 0
+      
     
     def get_port_status(self): #Changed from port_status to avoid key errors
         pass
@@ -204,7 +194,7 @@ class ports:
 class UAMs:
     def __init__(self, drone_name,offset):
         self.drone_name = drone_name
-        self.drone_no = drone_name # use split and get the drone number alone
+        self.drone_no = int(drone_name[-1]) # use split and get the drone number alone
         self.velocity = 1 # 1 m/s
         self.all_battery_states = {'critical':0,'sufficient':1,'full':2} #Added 4.25.22 -> 3 different battery states to go with the overall battery remaining
         self.battery_state = 2
@@ -224,8 +214,10 @@ class UAMs:
         self.drone_locs = [[0,0,-1],[6,0,-1],[4,4,-1],[6,4,-1],[-3,0,-1]]
         self.current_location = None
         self.in_battery_port = 0
+        self.collision_status = 0 #Can be 0 1or 1
+        self.schedule_status = 0 #Can be 0 or 1
         self.port_identification = None
-        self.upcoming_schedule = {"landing-time": None, "takeoff-time":None, 'landing-delay': None,'takeoff-delay':None,'time':None}
+        self.upcoming_schedule = {"landing-time": None, "takeoff-time":None, 'landing-delay': None,'takeoff-delay':None,'time':0}
         self.env_time = 0
 
     def get_status(self):
@@ -273,9 +265,20 @@ class UAMs:
             self.battery_state = self.all_battery_states['critical'] #Ditto
         
         
-    def distance_to_nearest_drone(self, drone_no):
-        #we can use it later
-        pass
+    def collision_avoidance(self):
+        drone_no = self.drone_no
+        locs_to_check = self.drone_locs
+        drone_loc = self.drone_locs[drone_no]
+        for drone_loc2 in locs_to_check:
+            dist = self._calculate_distance(drone_loc,drone_loc2)
+            zdist = self._calculate_distance(drone_loc[-1],drone_loc2[-1])
+            if (dist < self.dist_threshold) and (drone_loc != drone_loc2):
+                if (zdist < 1): #If the drones are too close to each other, which means they could possibly collide
+                    self.collision_status = 1
+                    return
+                else:
+                    self.collision_status = 0
+        
 
 
     
@@ -291,8 +294,8 @@ class UAMs:
         self.current_location = current_loc
         if self.status == self.all_states['in-action']: 
             if self.status_to_set == self.all_states['in-destination']: 
-                dist = self._calculate_distance(current_loc,self.job_status['final_dest'])
-                if dist < 5: #Drone reached destination and is ready for the next task
+                dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1]) #Adding [:-1] since the z height isn't as important and will be constantly changing, it will have to land after
+                if dist < 1: #Drone reached destination and is ready for the next task
                     # print(["status of ", self.drone_name ," changed from ", self.status ," to ", self.status_to_set])
                     self.set_status('in-destination','in-action')
                 else:
@@ -301,8 +304,8 @@ class UAMs:
                     # print(["status of ", self.drone_name ," should change from ", self.status ," to ", self.status_to_set, "current dist needed is", dist])
 
             elif self.status_to_set == self.all_states['battery-port']:
-                dist = self._calculate_distance(current_loc,self.job_status['final_dest'])
-                if dist < 5: #Drone reached the battery port and is ready to charge
+                dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1])
+                if dist < 1: #Drone reached the battery port and is ready to charge
                     client.landAsync(vehicle_name = self.drone_name)
                     self.in_battery_port = 1
                     # print(["status of ", self.drone_name ," changed from ", self.status ," to ", self.status_to_set])
@@ -315,8 +318,8 @@ class UAMs:
                     # print(["status of ", self.drone_name ," should change from ", self.status ," to ", self.status_to_set, "current dist needed is", dist])
 
             elif self.status_to_set == self.all_states['in-air']:
-                dist = self._calculate_distance(current_loc,self.job_status['final_dest'])
-                if dist < 5: #Drone reached the hover spot and is ready for the next task
+                dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1])
+                if dist < 1: #Drone reached the hover spot and is ready for the next task
                     client.hoverAsync(vehicle_name = self.drone_name)
                     old_position = current_loc
                     new_position = self.job_status['final_dest']
@@ -329,8 +332,8 @@ class UAMs:
                     client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
                     # print(["status of ", self.drone_name ," should change from ", self.status ," to ", self.status_to_set, "current dist needed is", dist])
             elif self.status_to_set == self.all_states['in-port']:
-                dist = self._calculate_distance(current_loc,self.job_status['final_dest'])
-                if dist < 5: #Drone reached destination and is ready for the next task
+                dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1])
+                if dist < 1: #Drone reached destination and is ready for the next task
                     # print(["status of ", self.drone_name ," changed from ", self.status ," to ", self.status_to_set])
                     self.set_status('in-port','in-action')
                 else:
@@ -390,11 +393,18 @@ class UAMs:
         self.job_status['final_dest'] = port.get_destination(choice)
         random_landing = random.randint(1,4) * 20
         random_takeoff = random.randint(1,4) * 20
-        self.upcoming_schedule["landing-time"] = random_landing + self.env_time
-        self.upcoming_schedule["takeoff-time"] = random_takeoff + self.env_time
+        self.upcoming_schedule["landing-time"] = random_landing + self.upcoming_schedule['time'] #changed from env time
+        self.upcoming_schedule["takeoff-time"] = random_takeoff + self.upcoming_schedule['time']
         # self.upcoming_schedule['landing-delay'] = None
         # self.upcoming_schedule['takeoff-delay'] = None
-        # self.upcoming_schedule['time'] = client.getMultirotorState().timestamp 
+
+    def update_time(self,loc,update):
+        time = self._calculate_distance(loc,self.current_location) / self.velocity
+        if time < 1: 
+            #drone is hovering or otherwise staying still
+            time = update
+        self.upcoming_schedule['time'] += time
+        # print('new time for drone:',self.drone_no,self.upcoming_schedule['time'])
 
     def get_state_status(self):
         """
@@ -409,10 +419,12 @@ class UAMs:
         None.
 
         """
-        if (self.upcoming_schedule["landing-time"] - 30 <= self.env_time <= self.upcoming_schedule["landing-time"]+30) or (self.upcoming_schedule["takeoff-time"] - 30 <= self.env_time <= self.upcoming_schedule["takeoff-time"]+30):
-            return 1
-        else:
+        if (self.upcoming_schedule["landing-time"] - 30 <= self.upcoming_schedule['time'] <= self.upcoming_schedule["landing-time"]+30) or (self.upcoming_schedule["takeoff-time"] - 30 <= self.upcoming_schedule['time'] <= self.upcoming_schedule["takeoff-time"]+30):
+            self.schedule_status = 0
             return 0
+        else:
+            self.schedule_status = 1
+            return 1
 
         
     

@@ -13,13 +13,13 @@ import random
 
 
 env = environment(5)
-check_env(env) #used to prepare env for training
+# check_env(env) #used to prepare env for training
 
 #Randomness test
 while True:
     action = random.randint(0,3)
     new_state,reward,done,info = env.step(action)
-    print('new state\n',new_state)
+    # print('new state\n',new_state)
 
 
 
