@@ -43,11 +43,11 @@ observation_space = spaces.Dict(
         ))
 
 vtol_features = np.matrix([
-    [1,0,0], #[Battery capacity, Current mode, Collision]
-    [1,0,0],
-    [1,2,0],
-    [1,0,0],
-    [1,0,0]])
+    [1,0,0,1], #[Battery capacity, Current mode,schedule status, Collision]
+    [1,0,0,1],
+    [1,2,1,0],
+    [1,0,1,0],
+    [1,0,0,0]])
 
 pad_features = np.matrix([
     [1,0], #[Availability, Port type]
@@ -61,8 +61,8 @@ pad_features = np.matrix([
     [1,2],
     [1,2]])
 
-next_drone = np.array([1,0,1,0,1,0])
-tnext_drone = torch.tensor([1,0,1,0,1,0],dtype=torch.float)
+next_drone = np.array([1,0,1,0,1,0,1])
+tnext_drone = torch.tensor([1,0,1,0,1,0,1],dtype=torch.float)
 tvtol_features = torch.tensor(vtol_features,dtype=torch.float)
 tpad_features = torch.tensor(pad_features,dtype=torch.float)
 
