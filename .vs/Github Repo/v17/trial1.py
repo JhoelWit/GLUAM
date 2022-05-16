@@ -1,3 +1,4 @@
+from weakref import finalize
 import airsim
 import cv2
 import numpy as np
@@ -6,23 +7,44 @@ import pprint
 # import setup_path 
 import tempfile
 
+from requests import get
 
+def get_final_pos(port, offset):
+        return [port[0] + offset[0] , port[1] + offset[1], offset[2]]
 
 # connect to the AirSim simulator
 client = airsim.MultirotorClient()
 client.confirmConnection()
-client.enableApiControl(True, "Drone1")
+client.enableApiControl(True, "Drone0")
 
-client.armDisarm(True, "Drone1")
+client.armDisarm(True, "Drone0")
 
 
-airsim.wait_key('Press any key to takeoff')
-f1 = client.takeoffAsync(vehicle_name="Drone1")
+# airsim.wait_key('Press any key to takeoff')
+f1 = client.takeoffAsync(vehicle_name="Drone0")
+# f1 = client.hoverAsync(vehicle_name="Drone1")
 f1.join()
 
+# port = [-2,3,-2]
+# port = [-1,-9,0]
+# port = [-9,-9,0]
+# port = [-10,0,0]
+# port = [-5,12,0]
+# port = [-8,12,0]
+# port = [-1,-5,0]
+port = [-5,-9,0]
 
 
-f1 = client.moveToPositionAsync(-7, 4, 0, 1, vehicle_name="Drone1")
+offset = [0,0,-2]
+final_pos = get_final_pos(port,offset)
+
+
+f1 = client.moveToPositionAsync(final_pos[0], final_pos[1], final_pos[2], 1, vehicle_name="Drone0")
+f1.join()
+
+# airsim.wait_key('Press any key to land')
+# fl = client.landAsync(vehicle_name='Drone1')
+f1 = client.hoverAsync(vehicle_name="Drone0")
 f1.join()
 
 #hover spots
@@ -42,7 +64,7 @@ f1.join()
 #-30,23,0 South East
 
 
-state1 = client.getMultirotorState(vehicle_name="Drone1")
+state1 = client.getMultirotorState(vehicle_name="Drone0")
 s = pprint.pformat(state1)
 print("state: %s" % s)
 

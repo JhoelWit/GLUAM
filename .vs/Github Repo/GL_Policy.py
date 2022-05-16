@@ -2,6 +2,7 @@ from cmath import inf
 import string
 from typing import Any, Dict, Optional, Tuple, Type
 import numpy as np
+import random
 import gym
 import torch
 from torch import long, nn,Tensor,tensor, bool
@@ -18,9 +19,6 @@ from stable_baselines3.common.distributions import (
     StateDependentNoiseDistribution,
     make_proba_distribution,
 )
-
-
-
 
 class CustomGLPolicy(BasePolicy):
     def __init__(self, 
@@ -44,10 +42,9 @@ class CustomGLPolicy(BasePolicy):
                                             optimizer_kwargs = optimizer_kwargs,   
                                             squash_output = squash_output                                         
                                             )
-        
 
         self.features_extractor = GNNFeatureExtractor()
-        value_net_net = [nn.Linear(features_dim, features_dim, bias=False),nn.Linear(features_dim, 1, bias=False)]
+        value_net_net = [nn.Linear(features_dim, features_dim, bias=True),nn.LeakyReLU(),nn.Linear(features_dim, features_dim, bias=True), nn.LeakyReLU(), nn.Linear(features_dim, features_dim, bias=True),nn.Linear(features_dim, 1, bias=True)]
         self.value_net = nn.Sequential(*value_net_net)
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
         self.action_dist = make_proba_distribution(action_space,use_sde=use_sde)
@@ -58,7 +55,6 @@ class CustomGLPolicy(BasePolicy):
 
     def _build(self):
         pass
-
 
     def evaluate_actions(self, obs: Tensor, actions: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
             distribution, values = self.get_distribution(obs)
@@ -71,7 +67,12 @@ class CustomGLPolicy(BasePolicy):
         distribution,values = self.get_distribution(obs)
         # print('distribution',distribution)
         # print('values',values)
-        actions = distribution.get_actions(deterministic=True)
+        entropy = random.random()
+        if entropy < 0.05:
+            deterministic = False
+        else:
+            deterministic = True
+        actions = distribution.get_actions(deterministic=deterministic)
         # print('actions',actions)
         log_prob = distribution.log_prob(actions)
 
@@ -86,10 +87,9 @@ class CustomGLPolicy(BasePolicy):
         feature_embedding,mean_actions = self.extract_features(obs)
 
         values = self.value_net(feature_embedding)
+        # print('value',values)
 
         latent_sde = feature_embedding
-
-
 
         if isinstance(self.action_dist, DiagGaussianDistribution):
             distribution =  self.action_dist.proba_distribution(mean_actions, self.log_std)
@@ -135,17 +135,19 @@ class GNNFeatureExtractor(nn.Module):
         ev_features = data['evtol_features'].float()
         ev_edge = data['evtol_edge'][0].long()
         next_drone = data['next_drone_embedding']
+        mask = data['mask'].bool()
+
+        verti_embed = self.vertiport(verti_features,verti_edge)
+        ev_embed = self.evtols(ev_features,ev_edge)
+        final_features = torch.cat((verti_embed,ev_embed,next_drone),dim=1)
+        output = self.output_space(final_features,mask) #Testing how the custom feature extractor works
 
         # print('verti_features',verti_features.shape,'\n','verti_edge',verti_edge.shape)
         # print('\n','ev_features',ev_features.shape,'\n','ev_edge',ev_edge.shape)
         # print('\n','next_drone',next_drone.shape)
-        verti_embed = self.vertiport(verti_features,verti_edge)
         # print('verti embed',verti_embed.shape)
-        ev_embed = self.evtols(ev_features,ev_edge)
         # print('ev embed',ev_embed.shape)
-        final_features = torch.cat((verti_embed,ev_embed,next_drone),dim=1)
         # print('length of final features',final_features.shape)
-        output = self.output_space(final_features) #Testing how the custom feature extractor works
         # print('shape of output is',output.shape)
         # output = output.reshape(output.shape[0],-1)
         # log_prob = torch.argmax(output,dim=1)
@@ -165,7 +167,6 @@ class GCN(nn.Module):
     def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
         # x: Feature matrix of shape [num_nodes, in_channels]
         # edge_index: Graph connectivity matrix of shape [2, num_edge]
-        # x = self.BatchNorm(x) #Acting weird with batches, ironically
 
 
         # x = self.BatchNorm(x) #Acting weird with batches, ironically
@@ -174,10 +175,7 @@ class GCN(nn.Module):
         x = self.conv2(x, edge_index)
         # print('x without pooling',x.shape)
 
-        #Pooling for the graph embedding
-
-        # x = global_mean_pool(x,batch=tensor([0],dtype=torch.int64),size = None) #problem is here, can't get the pooling to work. Not sure what exactly to put for size and batch...
-        # print('\n x with pooling',x)
+        #Pooling for the graph embedding, just a mean pool
         return x.mean(dim=1)
 
 class MLP(nn.Module):
@@ -203,18 +201,11 @@ class MLP(nn.Module):
 
         h2 = self.hidden(l1)
         l2 = self.Leaky_ReLU(h2)
-
-        # try: #Won't use a mask this time, not necessary
-        #     print('mask found')
-        #     ypred = self.output(l2)
-        #     ypred[tensor(mask, dtype=bool)] = -inf
-        #     print('ypred',ypred)
-        #     return ypred.tanh()
-        # except Exception as e:
-        #     print(e)
-
-        return self.output(l2).tanh()
-
+        # print('mask',mask)
+        ypred = self.output(l2)
+        ypred[mask] = -inf
+        return torch.log_softmax(ypred,dim = -1)
+       
 
 
         

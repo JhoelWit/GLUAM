@@ -5,9 +5,6 @@ Created on Wed Apr 20 11:38:39 2022
 @author: ADAMS-LAB
 """
 
-from numpy import empty
-
-
 class ActionManager:
     """
     This class should decode the actions and send the cooridnate to the Main environment
@@ -106,14 +103,14 @@ class ActionManager:
                 return {'action':'continue'}
             elif action == 1: #Deviate from path
                 return {'action':'deviate'}
-            else: #Any other action should give a penalty while drone is in action
+            else: #Any other action should give a penalty while drone is in action, won't happen due to masking 
                 return {'action':'reward-penalty'}
 
 
 
     
     def get_final_pos(self,port, offset):
-        return [port[0] + offset[0] , port[1] + offset[1], port[2]]
+        return [port[0] + offset[0] , port[1] + offset[1], offset[2]]
         
     
     

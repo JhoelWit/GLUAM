@@ -9,12 +9,9 @@ import numpy as np
 class StateManager:
     def __init__(self, ports):
         self.ports = ports
-        
     
     def get_obs(self, drone, graph_prop = None):
         """
-        
-        
         Battery capacity of current vehicle(0,1)
         Empty ports (0,1,2)
             3.1 Not available – 0
@@ -38,7 +35,7 @@ class StateManager:
 
         """
         drone_locs = drone.drone_locs 
-        battery_capacity = drone.get_battery_state()
+        battery_capacity = drone.battery_state
         empty_port = self.ports.get_availability_ports(drone_locs)                       
         empty_hovering_spots = self.ports.get_availability_hover_spots(drone_locs)        
         empty_battery_ports = self.ports.get_availability_battery_ports(drone_locs)       
@@ -50,9 +47,8 @@ class StateManager:
             return states
         else:
             graph_prop['next_drone_embedding'] = states
+            if drone.status == drone.all_states['in-action']: #Need to mask the other two actions for now, since we don't have any
+                graph_prop['mask'] = np.array([0,0,1,1])
+            else:
+                graph_prop['mask'] = np.array([0,0,0,0])
             return graph_prop
-    
-    
-    
-    def drones_search(self):
-        pass
