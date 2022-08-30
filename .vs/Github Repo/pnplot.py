@@ -56,7 +56,7 @@ def get_colors():
 set_style()
 
 
-# flatui = [ "#1C366A", "#106f96", "#1DABE6", "#2ecc71", "#C3CED0", "#E43034", "#3498db", "#e74c3c","#a65d42","#6e5200","#dcc4d2"]
-# palette = sns.set_palette(flatui) # sns.color_palette("colorblind", 3) #"Set2"
+flatui = [ "#1C366A", "#106f96", "#1DABE6", "#2ecc71", "#C3CED0", "#E43034", "#3498db", "#e74c3c","#a65d42","#6e5200","#dcc4d2"]
+palette = sns.set_palette(flatui) # sns.color_palette("colorblind", 3) #"Set2"
 # flatui = [ "#2ecc71", "#C3CED0", "#1DABE6", "#1C366A",  "#106f96", "#E43034", "#3498db", "#e74c3c","#a65d42","#6e5200","#dcc4d2"]
 # palette_B = sns.set_palette(flatui) # sns.color_palette("colorblind", 3) #"Set2"

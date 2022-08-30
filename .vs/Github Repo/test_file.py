@@ -10,17 +10,47 @@ from stable_baselines3.common.env_checker import check_env
 import gym
 import time
 import random
+import matplotlib.pyplot as plt
+import numpy as np
 
-
-env = environment(5)
+env = environment(5) #Changed from 5
 # check_env(env) #used to prepare env for training
 
 #Randomness test
+steps1 = 0
 while True:
     action = random.randint(0,3)
+    # action = 1
+    start_time = time.time()
     new_state,reward,done,info = env.step(action)
-    # print('new state\n',new_state)
+    print('time for one step',time.time() - start_time)
+    steps1+=1
+    if steps1 % 100 == 0:
+        env.reset()
+        steps1 = 0
 
+# for run in range(200):
+#     action = random.randint(0,3)
+#     new_state,reward,done,info = env.step(action)
+    # print('new state\n',new_state)
+# rewardls = []
+# mean_rew = []
+
+# for batches in range(20):
+#     print(batches)
+#     for steps in range(50):
+#         action = random.randint(0,3)
+#         new_state, reward, done, info = env.step(action)
+#         rewardls.append(reward)
+#     mean_rew.append(np.average(rewardls))
+#     env.reset()
+
+# steps = np.arange(len(mean_rew)) * 50
+# plt.plot(steps,mean_rew)
+# plt.xlabel('Steps')
+# plt.ylabel('Mean Reward')
+# plt.title('Random GRL Agent')
+# plt.show()
 
 
 

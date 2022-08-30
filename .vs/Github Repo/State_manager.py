@@ -43,12 +43,9 @@ class StateManager:
         collision = drone.collision_status
         schedule = drone.get_state_status() 
         states = np.array([battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,collision,schedule])
-        if not graph_prop:
-            return states
+        graph_prop['next_drone_embedding'] = states
+        if drone.status == drone.all_states['in-action']: #Need to mask the other two actions for now, since we don't have any
+            graph_prop['mask'] = np.array([0,0,1,1])
         else:
-            graph_prop['next_drone_embedding'] = states
-            if drone.status == drone.all_states['in-action']: #Need to mask the other two actions for now, since we don't have any
-                graph_prop['mask'] = np.array([0,0,1,1])
-            else:
-                graph_prop['mask'] = np.array([0,0,0,0])
-            return graph_prop
+            graph_prop['mask'] = np.array([0,0,0,0])
+        return graph_prop

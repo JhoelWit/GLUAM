@@ -8,7 +8,7 @@ from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv
 from environment import environment
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
-from GL_Policy import CustomGLPolicy
+from GL_Policy import CustomGLPolicy, CustomBaselinePolicy
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 import matplotlib.pyplot as plt
 import random
@@ -47,9 +47,9 @@ class TensorboardCallback(BaseCallback):
         step_time = self.training_env.get_attr('step_time')
         total_delay = self.training_env.get_attr('total_delay')
         near_misses = self.training_env.get_attr('near_misses')
+        self.logger.record_mean('mean_step_time',step_time[0])
         if self.num_timesteps % self.ep_len == 0:
             self.logger.record_mean('ep_mean_tasks_completed',tasks_completed[0]) #indexing 0 since the output is a list for some reason...
-            self.logger.record_mean('ep_mean_step_time',step_time[0])
             self.logger.record_mean('ep_mean_total_delay',total_delay[0]) 
             self.logger.record_mean('ep_mean_near_misses',near_misses[0])
         # if (self.num_timesteps % self.log_freq == 0): #displaying log data
@@ -61,8 +61,8 @@ class TensorboardCallback(BaseCallback):
                 print("Saving model checkpoint to {}".format(path))
         return True #No need to experiment with early stopping yet
 
-custom_callback = TensorboardCallback(ep_len = 600,log_freq= 1, save_freq=10000, save_path='./ATC_Model/',
-                                         name_prefix='ATC_GRL_Model5') #remember to update this
+custom_callback = TensorboardCallback(ep_len = 599,log_freq= 1, save_freq=10000, save_path='./ATC_Model/',
+                                         name_prefix='ATC_GRL_Model6') #remember to update this
        
 # env = DummyVecEnv([lambda: environment(5)])
 # env = SubprocVecEnv([lambda: environment(5)])
@@ -70,17 +70,37 @@ custom_callback = TensorboardCallback(ep_len = 600,log_freq= 1, save_freq=10000,
 env = environment(no_of_drones=5)
 
 model = PPO(CustomGLPolicy,env=env,tensorboard_log='ATC_GRL_Model/',verbose=1,n_steps=2000,batch_size=1000,gamma=1,learning_rate=0.00001,device='cuda')
-model.learn(total_timesteps=10_000_000,callback=custom_callback)
+model.learn(total_timesteps=300_000,callback=custom_callback)
 model.save("Final_ATC_GRL_model")
 
 
 
 
+# ep_len = 10000
+# model = PPO.load('Final_ATC_GRL_model')
+# grlrewards = []
+# rlrewards = []
+# random_rewards = []
 
-# model = PPO.load('ATC_Model/ATC_GRL_Model3_27000_steps')
+# obs = env.reset()
+# for i in range(ep_len):
+#     action,__states = model.predict(obs,deterministic=True)
+#     obs, reward, done, info = env.step(action)
+#     grlrewards.append(reward)
+
+# del model
+
+# model = PPO.load('Final_ATC_RL_model')
 # rewards = []
 # random_rewards = []
-# ep_len = 1000
+
+# obs = env.reset()
+# for i in range(ep_len):
+#     action,__states = model.predict(obs,deterministic=True)
+#     obs, reward, done, info = env.step(action)
+#     rlrewards.append(reward)
+
+# del model 
 
 # obs = env.reset()
 # for i in range(ep_len):
@@ -88,19 +108,15 @@ model.save("Final_ATC_GRL_model")
 #     obs, random_reward, done, info = env.step(action)
 #     random_rewards.append(random_reward)
 
-# obs = env.reset()
-# for i in range(ep_len):
-#     action,__states = model.predict(obs,deterministic=True)
-#     obs, reward, done, info = env.step(action)
-#     rewards.append(reward)
-
 # steps = np.arange(ep_len)
-# plt.plot(steps,rewards,label='trained agent')
+# plt.plot(steps,rlrewards,label='trained rl agent')
+# plt.plot(steps,grlrewards,label='trained grl agent')
 # plt.plot(steps,random_rewards,label='random agent')
 # plt.xlabel('Steps')
 # plt.ylabel('Reward')
+# # plt.title('5 eVTOLs')
 # plt.legend()
-# plt.savefig('reward_comparison.png')
+# plt.savefig('reward_comparison_10k.png',dpi=500)
 # plt.show()
 
 
