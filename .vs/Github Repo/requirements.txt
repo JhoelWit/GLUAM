@@ -69,7 +69,7 @@ pywin32==303
 pyzmq==22.3.0
 requests==2.27.1
 requests-oauthlib==1.3.1
-rlbench @ file:///D:/p00hb/Documents/ADAMS%20Research/Reinforcement_Learning/relearn/RLBench
+rlbench @ file:///D:/p00hb/Documents/ADAMS_Research/Reinforcement_Learning/relearn/RLBench
 rsa==4.8
 scikit-learn==1.0.2
 scipy==1.7.3

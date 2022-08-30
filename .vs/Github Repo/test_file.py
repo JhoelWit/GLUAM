@@ -10,47 +10,20 @@ from stable_baselines3.common.env_checker import check_env
 import gym
 import time
 import random
-import matplotlib.pyplot as plt
-import numpy as np
 
-env = environment(5) #Changed from 5
-# check_env(env) #used to prepare env for training
+
+env = environment(no_of_drones=4, type="graph")
+check_env(env) #used to prepare env for training
+# actions1 = {'Drone0':1,'Drone1':1,'Drone2':2,'Drone3':1}
+# actions2 = {'Drone0':3,'Drone1':1,'Drone2':2,'Drone3':1}
+# actions3 = {'Drone0':0,'Drone1':0,'Drone2':0,'Drone3':0}
+
 
 #Randomness test
-steps1 = 0
 while True:
-    action = random.randint(0,3)
-    # action = 1
-    start_time = time.time()
+    action = random.randint(0,7)
     new_state,reward,done,info = env.step(action)
-    print('time for one step',time.time() - start_time)
-    steps1+=1
-    if steps1 % 100 == 0:
-        env.reset()
-        steps1 = 0
 
-# for run in range(200):
-#     action = random.randint(0,3)
-#     new_state,reward,done,info = env.step(action)
-    # print('new state\n',new_state)
-# rewardls = []
-# mean_rew = []
-
-# for batches in range(20):
-#     print(batches)
-#     for steps in range(50):
-#         action = random.randint(0,3)
-#         new_state, reward, done, info = env.step(action)
-#         rewardls.append(reward)
-#     mean_rew.append(np.average(rewardls))
-#     env.reset()
-
-# steps = np.arange(len(mean_rew)) * 50
-# plt.plot(steps,mean_rew)
-# plt.xlabel('Steps')
-# plt.ylabel('Mean Reward')
-# plt.title('Random GRL Agent')
-# plt.show()
 
 
 

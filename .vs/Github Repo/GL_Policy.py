@@ -1,8 +1,10 @@
-from cmath import inf
+
 import string
 from typing import Any, Dict, Optional, Tuple, Type
-import numpy as np
 import random
+
+import numpy as np
+from cmath import inf
 import gym
 import torch
 from torch import long, nn,Tensor,tensor, bool
@@ -20,6 +22,7 @@ from stable_baselines3.common.distributions import (
     make_proba_distribution,
 )
 
+
 class CustomGLPolicy(BasePolicy):
     def __init__(self, 
                 observation_space: gym.spaces.Dict,
@@ -29,7 +32,7 @@ class CustomGLPolicy(BasePolicy):
                 use_sde: bool = False,
                 squash_output: bool = False,
                 ortho_init: bool = True,
-                features_dim = 135,
+                features_dim = 134,
                 features_extractor_kwargs: Optional[Dict[str, Any]] = None,
                 optimizer_class: Type[torch.optim.Optimizer] = torch.optim.Adam,
                 optimizer_kwargs: Optional[Dict[str, Any]] = None
@@ -50,7 +53,7 @@ class CustomGLPolicy(BasePolicy):
         self.action_dist = make_proba_distribution(action_space,use_sde=use_sde)
 
     def _predict(self, observation: Tensor, deterministic: bool = True) -> Tensor:
-            actions, values, log_prob = self.forward(observation, deterministic=deterministic)
+            actions, _, _ = self.forward(observation, deterministic=deterministic)
             return tensor([actions])
 
     def _build(self):
@@ -119,11 +122,11 @@ class GNNFeatureExtractor(nn.Module):
     def __init__(self): #This custom GNN receives the obs dict for the action log-probabilities
         super(GNNFeatureExtractor,self).__init__()
         verti_input_channels = 2
-        ev_input_channels = 4
+        ev_input_channels = 3
         hidden_channels = 150
         output_channels = 64 #length of each graph embedding
-        input_dim = 135 #length of feature vector for MLP
-        output_dim = 4 #output action dimensions
+        input_dim = 134 #length of feature vector for MLP
+        output_dim = 9 #output action dimensions
         self.vertiport = GCN(verti_input_channels,hidden_channels,output_channels) #input channels, hidden channels, output channels
         self.evtols = GCN(ev_input_channels,hidden_channels,output_channels) #Input channels, hidden channels, output channels
         self.output_space = GRLMLP(input_dim,output_dim) #Input dimension, output dimension

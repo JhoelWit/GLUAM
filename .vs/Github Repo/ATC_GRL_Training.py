@@ -42,16 +42,16 @@ class TensorboardCallback(BaseCallback):
             os.makedirs(self.save_path, exist_ok=True)
 
     def _on_step(self) -> bool:
-        #Logging the number of tasks completed
-        tasks_completed = self.training_env.get_attr('tasks_completed')
-        step_time = self.training_env.get_attr('step_time')
-        total_delay = self.training_env.get_attr('total_delay')
-        near_misses = self.training_env.get_attr('near_misses')
-        self.logger.record_mean('mean_step_time',step_time[0])
-        if self.num_timesteps % self.ep_len == 0:
-            self.logger.record_mean('ep_mean_tasks_completed',tasks_completed[0]) #indexing 0 since the output is a list for some reason...
-            self.logger.record_mean('ep_mean_total_delay',total_delay[0]) 
-            self.logger.record_mean('ep_mean_near_misses',near_misses[0])
+        # #Logging the number of tasks completed
+        # tasks_completed = self.training_env.get_attr('tasks_completed')
+        # step_time = self.training_env.get_attr('step_time')
+        # total_delay = self.training_env.get_attr('total_delay')
+        # near_misses = self.training_env.get_attr('near_misses')
+        # self.logger.record_mean('mean_step_time',step_time[0])
+        # if self.num_timesteps % self.ep_len == 0:
+        #     self.logger.record_mean('ep_mean_tasks_completed',tasks_completed[0]) #indexing 0 since the output is a list for some reason...
+        #     self.logger.record_mean('ep_mean_total_delay',total_delay[0]) 
+        #     self.logger.record_mean('ep_mean_near_misses',near_misses[0])
         # if (self.num_timesteps % self.log_freq == 0): #displaying log data
         #     self.logger.dump(self.num_timesteps)
         if self.n_calls % self.save_freq == 0: #Saving the model 
@@ -67,7 +67,7 @@ custom_callback = TensorboardCallback(ep_len = 599,log_freq= 1, save_freq=10000,
 # env = DummyVecEnv([lambda: environment(5)])
 # env = SubprocVecEnv([lambda: environment(5)])
 
-env = environment(no_of_drones=5)
+env = environment(no_of_drones=4, type="graph")
 
 model = PPO(CustomGLPolicy,env=env,tensorboard_log='ATC_GRL_Model/',verbose=1,n_steps=2000,batch_size=1000,gamma=1,learning_rate=0.00001,device='cuda')
 model.learn(total_timesteps=300_000,callback=custom_callback)
