@@ -132,21 +132,13 @@ class GL_ActionManager:
                         9 : "hover-1",
                         10 : "hover-2",
                         11 : "hover-3",
-                        12 : "hover-4"}
+                        12 : "hover-4",
+                        13 : "continue"}
 
     
     def action_decode(self,drone, action):
         """
         action count:
-            staystill - 0
-            takeoff location one - 1
-            move to normal port 1 - 2
-            move to normal port 2 - 3
-            move to battery port 1 - 4
-            move to hover spot 1 - 5
-            move to hover spot 2 - 6
-            move to hover spot 3 - 7
-            move to hover spot 4 - 8
 
             staystill - 0
             takeoff location one - 1
@@ -161,6 +153,7 @@ class GL_ActionManager:
             move to hover spot 2 - 10
             move to hover spot 3 - 11
             move to hover spot 4 - 12
+            continue moving - 13
             
 
             
@@ -184,7 +177,7 @@ class GL_ActionManager:
         action = self.actions[action]   # Converting to a string for readability. 
         status = drone.status
 
-        if status == "in-action":
+        if action == "continue":
             return {'action':'continue'}
 
         if action == "stay still":

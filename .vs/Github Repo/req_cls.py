@@ -41,7 +41,7 @@ class ports:
         self.no_battery_ports = len(self.battery_ports)
         self.no_hoverspots = len(self.hover_spots)
         self.no_total = self.no_ports + self.no_battery_ports + self.no_hoverspots
-        self.feature_mat = np.zeros((self.no_total,2)) #two features per port
+        self.feature_mat = np.zeros((self.no_total,5)) #five features per port
             
     def update_port(self,port):
         if port:
@@ -66,21 +66,21 @@ class ports:
             else:
                 availability = 1
             node_type = 0
-            self.feature_mat[i] = [availability,node_type]
+            self.feature_mat[i] = [availability, node_type, self.port_status[i]["position"][0], self.port_status[i]["position"][1], self.port_status[i]["position"][2]]
         for i in range(self.no_battery_ports):
             if self.battery_port_status[i]['occupied'] == True:
                 availability = 0
             else:
                 availability = 1
             node_type = 1
-            self.feature_mat[i+self.no_ports] = [availability,node_type]
+            self.feature_mat[i+self.no_ports] = [availability, node_type, self.port_status[i]["position"][0], self.port_status[i]["position"][1], self.port_status[i]["position"][2]]
         for i in range(self.no_hoverspots):
             if self.hover_spot_status[i]['occupied'] == True:
                 availability = 0
             else:
                 availability = 1
             node_type = 2
-            self.feature_mat[i+self.no_ports+self.no_battery_ports] = [availability,node_type]
+            self.feature_mat[i+self.no_ports+self.no_battery_ports] = [availability, node_type, self.port_status[i]["position"][0], self.port_status[i]["position"][1], self.port_status[i]["position"][2]]
             # 
     def get_all_empty_ports(self):
         return {"normal_ports":self.port_status, "battery_ports":self.battery_port_status, "hover_spots": self.hover_spot_status}
@@ -105,7 +105,9 @@ class ports:
                 self.change_hover_spot_status(self.hover_spot_status[i]['port_no'],True)
                 return self.hover_spot_status[i]
 
-    def get_destination(self,choice = 0):
+    def get_destination(self, choice = 0, number = None):
+        if number:
+            return self.fake_ports[number]
         if choice == 0:
             return random.choice(self.fake_ports)
         else:

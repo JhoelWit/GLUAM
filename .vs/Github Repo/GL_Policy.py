@@ -32,7 +32,7 @@ class CustomGLPolicy(BasePolicy):
                 use_sde: bool = False,
                 squash_output: bool = False,
                 ortho_init: bool = True,
-                features_dim = 134,
+                features_dim = 137,
                 features_extractor_kwargs: Optional[Dict[str, Any]] = None,
                 optimizer_class: Type[torch.optim.Optimizer] = torch.optim.Adam,
                 optimizer_kwargs: Optional[Dict[str, Any]] = None
@@ -121,12 +121,12 @@ class CustomGLPolicy(BasePolicy):
 class GNNFeatureExtractor(nn.Module):
     def __init__(self): #This custom GNN receives the obs dict for the action log-probabilities
         super(GNNFeatureExtractor,self).__init__()
-        verti_input_channels = 2
-        ev_input_channels = 3
+        verti_input_channels = 5
+        ev_input_channels = 6
         hidden_channels = 150
         output_channels = 64 #length of each graph embedding
-        input_dim = 134 #length of feature vector for MLP
-        output_dim = 9 #output action dimensions
+        input_dim = 137 #length of feature vector for MLP
+        output_dim = 13 #output action dimensions
         self.vertiport = GCN(verti_input_channels,hidden_channels,output_channels) #input channels, hidden channels, output channels
         self.evtols = GCN(ev_input_channels,hidden_channels,output_channels) #Input channels, hidden channels, output channels
         self.output_space = GRLMLP(input_dim,output_dim) #Input dimension, output dimension

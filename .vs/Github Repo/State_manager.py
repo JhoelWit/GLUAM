@@ -37,6 +37,20 @@ class StateManager:
         None.
 
         """
+        def generate_mask():
+            """Returns a mask to use for the GRL and RL policy models."""
+            if drone.status == drone.all_states["in-action"]:
+                mask = [1] * 13
+                mask[-1] = 0
+                return np.array(mask)
+
+            mask = [0] * 13
+            for row_idx, row in self.ports.feature_matrix:  # Looks at availability of each port and masks if the port is not available
+                mask[row_idx + 6] = 1 if row[0] == 0 else 0
+            
+            return np.array(mask)
+
+
         print(drone.get_all_status())
         drone_locs = drone.drone_locs 
         battery_capacity = drone.get_battery_state()
@@ -45,16 +59,21 @@ class StateManager:
         empty_battery_ports = self.ports.get_availability_battery_ports(drone_locs)       
         status = drone.get_status()
         schedule = drone.get_state_status() 
-        states = np.array([battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,schedule])
+        states = np.array([battery_capacity,
+                            empty_port,
+                            empty_hovering_spots,
+                            empty_battery_ports,
+                            status,
+                            schedule, 
+                            drone.current_location[0], 
+                            drone.current_location[1], 
+                            drone.current_location[2]])
         if type == "regular":
             return states
+            
         elif type == "graph":
             graph_prop['next_drone_embedding'] = states
-            if drone.status == drone.all_states['in-action']:
-                graph_prop['mask'] = np.array([1, 1, 0, 0, 0, 0, 0, 0, 0])
-            else:
-                graph_prop['mask'] = np.array([0, 0, 0, 0, 1, 1, 1, 1, 1])
-            
+            graph_prop["mask"] = generate_mask()
             return graph_prop
     
     
