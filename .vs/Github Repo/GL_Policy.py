@@ -126,7 +126,7 @@ class GNNFeatureExtractor(nn.Module):
         hidden_channels = 150
         output_channels = 64 #length of each graph embedding
         input_dim = 136 #length of feature vector for MLP
-        output_dim = 13 #output action dimensions
+        output_dim = 14 #output action dimensions
         self.vertiport = GCN(verti_input_channels,hidden_channels,output_channels) #input channels, hidden channels, output channels
         self.evtols = GCN(ev_input_channels,hidden_channels,output_channels) #Input channels, hidden channels, output channels
         self.output_space = GRLMLP(input_dim,output_dim) #Input dimension, output dimension
@@ -306,11 +306,11 @@ class CustomBaselinePolicy(BasePolicy):
 class BaseFeatureExtractor(nn.Module):
     def __init__(self): #This custom GNN receives the obs dict for the action log-probabilities
         super(BaseFeatureExtractor,self).__init__()
-        input_channels = 7
+        input_channels = 8
         hidden_channels = 100
         output_channels = 50 #length of each graph embedding
         input_dim = 50 #length of feature vector for MLP
-        output_dim = 4 #output action dimensions
+        output_dim = 14 #output action dimensions
         # self.vertiport = GCN(verti_input_channels,hidden_channels,output_channels) #input channels, hidden channels, output channels
         # self.evtols = GCN(ev_input_channels,hidden_channels,output_channels) #Input channels, hidden channels, output channels
         self.network = nn.Sequential(

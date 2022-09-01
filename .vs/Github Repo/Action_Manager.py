@@ -201,7 +201,7 @@ class GL_ActionManager:
                 drone.port_identification = {'type':'normal','port_no':0}
 
                 #self.port.update_port(drone.port_identification)
-                self.port.change_status_normal_port(0, True)
+                self.port.change_status_normal_port(norm_num, True)
 
                 return {"position" : final_pos, "action": "land"}
 
@@ -218,13 +218,13 @@ class GL_ActionManager:
                 return {"position" : final_pos, "action": "land-b"}        
         
         elif action in ["hover-1", "hover-2", "hover-3", "hover-4"]:
-            hover_num = int(action) - 1
+            hover_num = int(action[-1]) - 1
             if not self.port.get_port_status(hover_num, "hover"):
                 final_pos = self.get_final_pos(self.port.hover_spot_status[hover_num]["position"], drone.offset)
                 drone.in_battery_port = 0
                 self.port.update_port(drone.port_identification)
                 drone.port_identification = {'type':'hover','port_no':hover_num}
-                self.port.change_hover_spot_status(0, True)
+                self.port.change_hover_spot_status(hover_num, True)
 
                 return {"position" : final_pos, "action": "hover"}
     

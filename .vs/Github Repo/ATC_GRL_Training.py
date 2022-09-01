@@ -62,7 +62,7 @@ class TensorboardCallback(BaseCallback):
         return True #No need to experiment with early stopping yet
 
 custom_callback = TensorboardCallback(ep_len = 599,log_freq= 1, save_freq=10000, save_path='./ATC_Model/',
-                                         name_prefix='ATC_GRL_Model6') #remember to update this
+                                         name_prefix='ATC_GRL_Model') 
        
 # env = DummyVecEnv([lambda: environment(5)])
 # env = SubprocVecEnv([lambda: environment(5)])

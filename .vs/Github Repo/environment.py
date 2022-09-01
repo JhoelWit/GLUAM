@@ -30,11 +30,14 @@ class environment(gym.Env):
         self.env_time = 0
         cont_bound = np.finfo(np.float32).max
         if type == "regular":
-            self.action_space = spaces.Discrete(13) 
+            self.action_space = spaces.Discrete(14) 
             # self.observation_space = spaces.MultiDiscrete([3,3,3,3,2,2]) # Can't use discrete with location values. 
-            self.observation_space = spaces.Box(low=-cont_bound, high=cont_bound, shape=(8,), dtype=np.float32) #[battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,schedule, x, y, z ]
+            self.observation_space = spaces.Dict(
+                                        dict(
+                                            next_drone_embedding = spaces.Box(low=-cont_bound, high=cont_bound, shape=(8,), dtype=np.float32), #[battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,schedule, x, y, z ]
+                                            mask = spaces.Box(low=-cont_bound, high=cont_bound, shape=(14,), dtype=np.float32)))
         elif type == "graph":
-            self.action_space = spaces.Discrete(13) 
+            self.action_space = spaces.Discrete(14) 
             self.observation_space = spaces.Dict(
             dict(
                 vertiport_features = spaces.Box(low=-cont_bound,high=cont_bound,shape=(7,4), dtype=np.float32),
@@ -42,7 +45,7 @@ class environment(gym.Env):
                 evtol_features = spaces.Box(low=-cont_bound,high=cont_bound,shape=(4,5), dtype=np.float32),
                 evtol_edge = spaces.Box(low=0.0,high=4.0,shape=(2,12), dtype=np.float32),
                 next_drone_embedding = spaces.Box(low=-cont_bound,high=cont_bound,shape=(8,),dtype=np.float32),
-                mask = spaces.Box(low=0,high=1,shape=(13,),dtype=np.float32)
+                mask = spaces.Box(low=0,high=1,shape=(14,),dtype=np.float32)
             ))
         self.type = type
         self.client = airsim.MultirotorClient()
@@ -330,19 +333,36 @@ class environment(gym.Env):
     def calculate_reward_gl(self, action, future_loc):
         #pass the decoded action
         #http://lidavidm.github.io/sympy/modules/geometry/line3d.html    - used this
-        lambda_ = self.current_drone.schedule_status # Depends on the schedule of the UAM
-        beta = self.current_drone.battery_state # Depends on the battery of the UAM
-        if self.current_drone.status == self.current_drone.all_states["in-action"]:
-            safety = self.calculate_safety(action, future_loc) + self.calculate_safety_2()
+        drone = self.current_drone
+        ref_states = drone.all_states
+        ref_bat = drone.all_battery_states
+
+        lambda_ = 0 # Depends on the battery
+        if drone.status_to_set == ref_states["battery-port"] and drone.battery_state == ref_bat["sufficient"]:
+            lambda_ = 1
+        elif drone.status_to_set == ref_states["in-action"] and drone.battery_state == ref_bat["sufficient"]:
+            lambda_ = 1
+        elif drone.battery_state == ref_bat["critical"]:
+            lambda_ = -1
+        
+        beta = drone.upcoming_schedule["landing-delay"] if drone.status in [ref_states["in-action"], ref_states["in-air"]] \
+        else drone.upcoming_schedule["takeoff-delay"] # Depends on the delay
+
+        if not beta or (drone.schedule_status == 1): # If no delay or if drone is early.
+            beta = 0
         else:
-            safety = 1
-        print("safety", safety)
+            beta /= 100
+
+        safety = self.calculate_safety(action, future_loc) + self.calculate_safety_2()
         formula = lambda_ * (np.exp(-beta)**2) + safety
         return formula
     
     def calculate_safety_2(self):
         """This is an attempt to determine intersections using 2D points, distance and velocity."""
-        threshold = 10  # This number may be too high based on testing. 
+        if self.current_drone.status != self.current_drone.all_states["in-action"]:
+            return 0
+
+        threshold = 3  # minimum safe separation distance in meters
         curr_drone = self.current_drone
         curr_pos = curr_drone.current_location
         final_pos  = curr_drone.job_status["final_dest"]
@@ -365,20 +385,40 @@ class environment(gym.Env):
                     curr_drone_v = self.client.getMultirotorState(vehicle_name=curr_drone.drone_name).kinematics_estimated.linear_velocity
                     other_drone_v = self.client.getMultirotorState(vehicle_name=other_drone.drone_name).kinematics_estimated.linear_velocity
 
-                    inter_norm = np.linalg.norm(intersection)
-                    curr_norm, curr_vnorm = np.linalg.norm(curr_segment), np.linalg.norm(np.array([curr_drone_v.x_val, curr_drone_v.y_val]).astype(np.float32))
-                    other_norm, other_vnorm = np.linalg.norm(other_segment), np.linalg.norm(np.array([other_drone_v.x_val, other_drone_v.y_val]).astype(np.float32))
 
-                    # Attempting to solve for time of intersection for both drones and checking if the times are too close.
-                    # Basically, inter_norm = curr_norm + curr_vnorm * t_intersect, and vice versa for the other drone.
+                    # inter_norm = np.linalg.norm(intersection)
+                    # curr_norm, curr_vnorm = np.linalg.norm(curr_segment), np.linalg.norm(np.array([curr_drone_v.x_val, curr_drone_v.y_val]).astype(np.float32))
+                    # other_norm, other_vnorm = np.linalg.norm(other_segment), np.linalg.norm(np.array([other_drone_v.x_val, other_drone_v.y_val]).astype(np.float32))
 
-                    ti_curr, ti_other = (inter_norm - curr_norm) / curr_vnorm, (inter_norm - other_norm) / other_vnorm
+                    # # Attempting to solve for time of intersection for both drones and checking if the times are too close.
+                    # # Basically, P2 = P1 + V * T_intersect, and vice versa for the other drone.
 
-                    if abs(ti_curr - ti_other) <= threshold:
-                        print(f"Drones will collide, intersection 1: {ti_curr}s, intersection 2: {ti_other}s.")
+                    # ti_curr, ti_other = (inter_norm - curr_norm) / curr_vnorm, (inter_norm - other_norm) / other_vnorm
+
+                    # if abs(ti_curr - ti_other) <= threshold:
+                    #     print(f"Drones will collide, intersection 1: {ti_curr}s, intersection 2: {ti_other}s.")
+                    #     return -5
+                    # else:
+                    #     return 5
+
+                    numerator = 2*(curr_drone_v.x_val - other_drone_v.x_val)*(curr_pos[0] - other_loc[0]) + \
+                                2*(curr_drone_v.y_val - other_drone_v.y_val)*(curr_pos[1] - other_loc[1])
+                    denominator = 2*(curr_drone_v.x_val - other_drone_v.x_val)**2 + 2*(curr_drone_v.y_val - other_drone_v.y_val)**2
+                    t_min_sep = - numerator / denominator
+
+                    x_ = (curr_pos[0] - other_loc[0] + t_min_sep*(curr_drone_v.x_val - other_drone_v.x_val))**2
+                    y_ = (curr_pos[1] - other_loc[1] + t_min_sep*(curr_drone_v.y_val - other_drone_v.y_val))**2
+                    min_sep = np.sqrt(x_ + y_)  # Euclid distance
+                    print(f"minimum separation {min_sep}")
+
+                    if min_sep < threshold:
+                        print(f"Drones will collide, minimum seperation is {min_sep}.")
                         return -5
                     else:
                         return 5
+
+
+                   
 
         return 0
 
