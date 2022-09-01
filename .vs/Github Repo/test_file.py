@@ -13,7 +13,7 @@ import random
 
 
 env = environment(no_of_drones=4, type="graph")
-check_env(env) #used to prepare env for training
+# check_env(env) #used to prepare env for training
 # actions1 = {'Drone0':1,'Drone1':1,'Drone2':2,'Drone3':1}
 # actions2 = {'Drone0':3,'Drone1':1,'Drone2':2,'Drone3':1}
 # actions3 = {'Drone0':0,'Drone1':0,'Drone2':0,'Drone3':0}

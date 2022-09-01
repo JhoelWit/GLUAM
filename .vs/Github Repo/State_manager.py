@@ -45,7 +45,7 @@ class StateManager:
                 return np.array(mask)
 
             mask = [0] * 13
-            for row_idx, row in self.ports.feature_matrix:  # Looks at availability of each port and masks if the port is not available
+            for row_idx, row in enumerate(self.ports.feature_mat):  # Looks at availability of each port and masks if the port is not available
                 mask[row_idx + 6] = 1 if row[0] == 0 else 0
             
             return np.array(mask)
@@ -66,8 +66,7 @@ class StateManager:
                             status,
                             schedule, 
                             drone.current_location[0], 
-                            drone.current_location[1], 
-                            drone.current_location[2]])
+                            drone.current_location[1]])
         if type == "regular":
             return states
             

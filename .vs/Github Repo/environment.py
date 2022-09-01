@@ -25,22 +25,24 @@ class environment(gym.Env):
         self.current_drone = None
         self.state_manager = None
         self.total_timesteps = 0
-        self.clock_speed = 20
+        self.clock_speed = 30
         self.start_time = time.time()                   #environment times will be in seconds
         self.env_time = 0
+        cont_bound = np.finfo(np.float32).max
         if type == "regular":
-            self.action_space = spaces.Discrete(8) 
-            self.observation_space = spaces.MultiDiscrete([3,3,3,3,2,2]) #[battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,schedule ]
+            self.action_space = spaces.Discrete(13) 
+            # self.observation_space = spaces.MultiDiscrete([3,3,3,3,2,2]) # Can't use discrete with location values. 
+            self.observation_space = spaces.Box(low=-cont_bound, high=cont_bound, shape=(8,), dtype=np.float32) #[battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,schedule, x, y, z ]
         elif type == "graph":
-            self.action_space = spaces.Discrete(8) 
+            self.action_space = spaces.Discrete(13) 
             self.observation_space = spaces.Dict(
             dict(
-                vertiport_features = spaces.Box(low=0.0,high=2.0,shape=(7,2), dtype=np.float32),
+                vertiport_features = spaces.Box(low=-cont_bound,high=cont_bound,shape=(7,4), dtype=np.float32),
                 vertiport_edge = spaces.Box(low=0.0,high=9.0,shape=(2,42), dtype=np.float32),
-                evtol_features = spaces.Box(low=0.0,high=4.0,shape=(4,3), dtype=np.float32),
+                evtol_features = spaces.Box(low=-cont_bound,high=cont_bound,shape=(4,5), dtype=np.float32),
                 evtol_edge = spaces.Box(low=0.0,high=4.0,shape=(2,12), dtype=np.float32),
-                next_drone_embedding = spaces.Box(low=0,high=2,shape=(6,),dtype=np.float32),
-                mask = spaces.Box(low=0,high=1,shape=(9,),dtype=np.float32)
+                next_drone_embedding = spaces.Box(low=-cont_bound,high=cont_bound,shape=(8,),dtype=np.float32),
+                mask = spaces.Box(low=0,high=1,shape=(13,),dtype=np.float32)
             ))
         self.type = type
         self.client = airsim.MultirotorClient()
@@ -60,7 +62,7 @@ class environment(gym.Env):
                             'next_drone_embedding':{}, 'mask':{}}
         self.graph_prop['vertiport_edge'] = self.create_edge_connect(num_nodes=self.port.no_total)
         self.graph_prop['evtol_edge'] = self.create_edge_connect(num_nodes=self.no_drones)
-        self.drone_feature_mat = np.zeros((self.no_drones,3)) #four features per drone
+        self.drone_feature_mat = np.zeros((self.no_drones,6)) #six features per drone
         for i in range(self.no_drones):
             drone_name = "Drone"+str(i)
             offset = self.drone_offsets[i]
@@ -330,12 +332,54 @@ class environment(gym.Env):
         #http://lidavidm.github.io/sympy/modules/geometry/line3d.html    - used this
         lambda_ = self.current_drone.schedule_status # Depends on the schedule of the UAM
         beta = self.current_drone.battery_state # Depends on the battery of the UAM
-        safety = self.calculate_safety(action, future_loc)
+        if self.current_drone.status == self.current_drone.all_states["in-action"]:
+            safety = self.calculate_safety(action, future_loc) + self.calculate_safety_2()
+        else:
+            safety = 1
         print("safety", safety)
         formula = lambda_ * (np.exp(-beta)**2) + safety
         return formula
     
-    
+    def calculate_safety_2(self):
+        """This is an attempt to determine intersections using 2D points, distance and velocity."""
+        threshold = 10
+        curr_drone = self.current_drone
+        curr_pos = curr_drone.current_location
+        final_pos  = curr_drone.job_status["final_dest"]
+        curr_segment = Segment3D(tuple(curr_pos[:-1]), tuple(final_pos[:-1]))
+
+        other_drones = self.all_drones
+        other_drones.pop(other_drones.index(curr_drone))
+        for other_drone in other_drones:
+            if other_drone.status == curr_drone.all_states["in-action"]:
+                other_loc = other_drone.current_location
+                other_final_pos = other_drone.job_status["final_dest"]
+                other_segment = Segment3D(tuple(other_loc[:-1]), tuple(other_final_pos[:-1]))
+                intersection = curr_segment.intersect(other_segment)
+                if intersection:  # Check the distance between each drone and the intersection point, and calc the times.
+
+                    curr_drone_v = self.client.getMultirotorState(vehicle_name=curr_drone.drone_name).kinematics_estimated.linear_velocity
+                    other_drone_v = self.client.getMultirotorState(vehicle_name=other_drone.drone_name).kinematics_estimated.linear_velocity
+
+                    inter_norm = np.linalg.norm(intersection)
+                    curr_norm, curr_vnorm = np.linalg.norm(curr_segment), np.linalg.norm(np.array([curr_drone_v.x_val, curr_drone_v.y_val]))
+                    other_norm, other_vnorm = np.linalg.norm(other_segment), np.linalg.norm(np.array([other_drone_v.x_val, other_drone_v.y_val]))
+
+                    # Attempting to solve for time of intersection for both drones and checking if the times are too close.
+                    # Basically, inter_norm = curr_norm + curr_vnorm * t_intersect, and vice versa for the other drone.
+
+                    ti_curr, ti_other = (inter_norm - curr_norm) / curr_vnorm, (inter_norm - other_norm) / other_vnorm
+
+                    if abs(ti_curr - ti_other) <= threshold:
+                        print(f"Drones will collide, intersection 1: {ti_curr}, intersection 2: {ti_other}.")
+                        return -5
+                    else:
+                        return 5
+
+        return 0
+
+
+
     def calculate_safety(self, action, future_loc):
         """
         
@@ -476,7 +520,7 @@ class environment(gym.Env):
             self.env_time = (time.time() - self.start_time) * 20
             i.update(loc,self.client,self.port,self.env_time)
             i.get_state_status()
-            self.drone_feature_mat[self.all_drones.index(i)] = [i.battery_state, i.status, i.schedule_status] 
+            self.drone_feature_mat[self.all_drones.index(i)] = [i.battery_state, i.status, i.schedule_status, x, y] 
         self.port.update_all()
         self.graph_prop['vertiport_features'] = self.port.feature_mat
         self.graph_prop['evtol_features'] = self.drone_feature_mat

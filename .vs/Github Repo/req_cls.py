@@ -36,12 +36,9 @@ class ports:
         self.hover_spot_status = {}
         for i in range(self.no_hoverspots):
             self.hover_spot_status[i] = {"port_no": i,"position":self.hover_spots[i],"occupied": False, "type": 2}
-    
-        self.no_ports = len(self.normal_ports)
-        self.no_battery_ports = len(self.battery_ports)
-        self.no_hoverspots = len(self.hover_spots)
+
         self.no_total = self.no_ports + self.no_battery_ports + self.no_hoverspots
-        self.feature_mat = np.zeros((self.no_total,5)) #five features per port
+        self.feature_mat = np.zeros((self.no_total, 4)) #four features per port
             
     def update_port(self,port):
         if port:
@@ -66,22 +63,22 @@ class ports:
             else:
                 availability = 1
             node_type = 0
-            self.feature_mat[i] = [availability, node_type, self.port_status[i]["position"][0], self.port_status[i]["position"][1], self.port_status[i]["position"][2]]
+            self.feature_mat[i] = [availability, node_type, self.port_status[i]["position"][0], self.port_status[i]["position"][1]]
         for i in range(self.no_battery_ports):
             if self.battery_port_status[i]['occupied'] == True:
                 availability = 0
             else:
                 availability = 1
             node_type = 1
-            self.feature_mat[i+self.no_ports] = [availability, node_type, self.port_status[i]["position"][0], self.port_status[i]["position"][1], self.port_status[i]["position"][2]]
+            self.feature_mat[i+self.no_ports] = [availability, node_type, self.battery_port_status[i]["position"][0], self.battery_port_status[i]["position"][1]]
         for i in range(self.no_hoverspots):
             if self.hover_spot_status[i]['occupied'] == True:
                 availability = 0
             else:
                 availability = 1
             node_type = 2
-            self.feature_mat[i+self.no_ports+self.no_battery_ports] = [availability, node_type, self.port_status[i]["position"][0], self.port_status[i]["position"][1], self.port_status[i]["position"][2]]
-            # 
+            self.feature_mat[i+self.no_ports+self.no_battery_ports] = [availability, node_type, self.hover_spot_status[i]["position"][0], self.hover_spot_status[i]["position"][1]]
+
     def get_all_empty_ports(self):
         return {"normal_ports":self.port_status, "battery_ports":self.battery_port_status, "hover_spots": self.hover_spot_status}
             
