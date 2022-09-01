@@ -15,7 +15,7 @@ import copy
 import time
 import random
 import numpy as np
-from sympy.geometry import Segment3D
+from sympy.geometry import Segment3D, Segment2D
 
 class environment(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -53,7 +53,7 @@ class environment(gym.Env):
 
     def _initialize(self):
 
-        self.env_time = (time.time() - self.start_time) *20
+        self.env_time = (time.time() - self.start_time) *self.clock_speed
         self.total_timesteps = 0
         self.all_drones = list()
         self.port = ports(self.no_drones)
@@ -62,7 +62,7 @@ class environment(gym.Env):
                             'next_drone_embedding':{}, 'mask':{}}
         self.graph_prop['vertiport_edge'] = self.create_edge_connect(num_nodes=self.port.no_total)
         self.graph_prop['evtol_edge'] = self.create_edge_connect(num_nodes=self.no_drones)
-        self.drone_feature_mat = np.zeros((self.no_drones,6)) #six features per drone
+        self.drone_feature_mat = np.zeros((self.no_drones,5)) #five features per drone
         for i in range(self.no_drones):
             drone_name = "Drone"+str(i)
             offset = self.drone_offsets[i]
@@ -215,7 +215,7 @@ class environment(gym.Env):
             reward = 0
         self.select_next_drone()
         new_state = self._get_obs()
-        self.env_time = (time.time() - self.start_time)  * 20                #reduce this if the simulation is too fast
+        self.env_time = (time.time() - self.start_time)  * self.clock_speed                #reduce this if the simulation is too fast
         self.total_timesteps +=1
         # self.debugg()
         done = self.done             #none based on time steps
@@ -342,28 +342,32 @@ class environment(gym.Env):
     
     def calculate_safety_2(self):
         """This is an attempt to determine intersections using 2D points, distance and velocity."""
-        threshold = 10
+        threshold = 10  # This number may be too high based on testing. 
         curr_drone = self.current_drone
         curr_pos = curr_drone.current_location
         final_pos  = curr_drone.job_status["final_dest"]
-        curr_segment = Segment3D(tuple(curr_pos[:-1]), tuple(final_pos[:-1]))
+        curr_segment = Segment2D(tuple(curr_pos[:-1]), tuple(final_pos[:-1]))
 
-        other_drones = self.all_drones
+        other_drones = self.all_drones.copy()
         other_drones.pop(other_drones.index(curr_drone))
         for other_drone in other_drones:
             if other_drone.status == curr_drone.all_states["in-action"]:
                 other_loc = other_drone.current_location
                 other_final_pos = other_drone.job_status["final_dest"]
-                other_segment = Segment3D(tuple(other_loc[:-1]), tuple(other_final_pos[:-1]))
+                other_segment = Segment2D(tuple(other_loc[:-1]), tuple(other_final_pos[:-1]))
                 intersection = curr_segment.intersect(other_segment)
                 if intersection:  # Check the distance between each drone and the intersection point, and calc the times.
+
+                    intersection = np.array(intersection.args[0].coordinates).astype(np.float32)
+                    curr_segment = np.array(curr_segment.args[0].coordinates).astype(np.float32)
+                    other_segment = np.array(other_segment.args[0].coordinates).astype(np.float32)
 
                     curr_drone_v = self.client.getMultirotorState(vehicle_name=curr_drone.drone_name).kinematics_estimated.linear_velocity
                     other_drone_v = self.client.getMultirotorState(vehicle_name=other_drone.drone_name).kinematics_estimated.linear_velocity
 
                     inter_norm = np.linalg.norm(intersection)
-                    curr_norm, curr_vnorm = np.linalg.norm(curr_segment), np.linalg.norm(np.array([curr_drone_v.x_val, curr_drone_v.y_val]))
-                    other_norm, other_vnorm = np.linalg.norm(other_segment), np.linalg.norm(np.array([other_drone_v.x_val, other_drone_v.y_val]))
+                    curr_norm, curr_vnorm = np.linalg.norm(curr_segment), np.linalg.norm(np.array([curr_drone_v.x_val, curr_drone_v.y_val]).astype(np.float32))
+                    other_norm, other_vnorm = np.linalg.norm(other_segment), np.linalg.norm(np.array([other_drone_v.x_val, other_drone_v.y_val]).astype(np.float32))
 
                     # Attempting to solve for time of intersection for both drones and checking if the times are too close.
                     # Basically, inter_norm = curr_norm + curr_vnorm * t_intersect, and vice versa for the other drone.
@@ -371,7 +375,7 @@ class environment(gym.Env):
                     ti_curr, ti_other = (inter_norm - curr_norm) / curr_vnorm, (inter_norm - other_norm) / other_vnorm
 
                     if abs(ti_curr - ti_other) <= threshold:
-                        print(f"Drones will collide, intersection 1: {ti_curr}, intersection 2: {ti_other}.")
+                        print(f"Drones will collide, intersection 1: {ti_curr}s, intersection 2: {ti_other}s.")
                         return -5
                     else:
                         return 5
@@ -517,7 +521,7 @@ class environment(gym.Env):
             loc = [x,y,z]
             i.current_location = loc
             i.drone_locs[self.all_drones.index(i)] = loc
-            self.env_time = (time.time() - self.start_time) * 20
+            self.env_time = (time.time() - self.start_time) * self.clock_speed
             i.update(loc,self.client,self.port,self.env_time)
             i.get_state_status()
             self.drone_feature_mat[self.all_drones.index(i)] = [i.battery_state, i.status, i.schedule_status, x, y] 
