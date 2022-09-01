@@ -49,26 +49,6 @@ class environment(gym.Env):
 
         #every step can be counted as 20 seconds (or whatever is better). not using actual times
 
-    
-    def time_update(self):
-        # print('motorstate',self.client.getMultirotorState().timestamp)
-        dronetime = self.client.getMultirotorState().timestamp 
-        # print('time update',dronetime)
-        return (dronetime - self.start_time)
-    
-    def uam_time_update(self,drone,action):
-        time = self.client.getMultirotorState().timestamp 
-        # print('time1',time)
-        print(drone.upcoming_schedule['time'])
-      #  drone.upcoming_schedule['time'] = (time - drone.upcoming_schedule['time'])
-        print(drone.upcoming_schedule['time'])
-        if action == 'land' or action == 'land-b':
-            drone.upcoming_schedule['landing-delay'] = drone.upcoming_schedule['landing-time'] - drone.upcoming_schedule['time']
-        elif action == 'takeoff' or action == 'hover' or action == 'move-b':
-            drone.upcoming_schedule['takeoff-delay'] = drone.upcoming_schedule['takeoff-time'] - drone.upcoming_schedule['time']  
-
-
-
     def _initialize(self):
 
         self.env_time = (time.time() - self.start_time) *20
@@ -128,41 +108,6 @@ class environment(gym.Env):
             self.move_position(drone.drone_name,initial_des,join=0)
         self.update_all()
 
-
-
-
-
-    # def initial_setup(self):
-    #     """
-    #     setup the initial state of the drones 
-    #     one landed, two in destination and 1 will be in hoverspot
-
-    #     Returns
-    #     -------
-    #     None.
-
-    #     """
-    #     hover_loc = self.port.get_empty_hover_status()
-    #     final_pos = self.get_final_pos(hover_loc["position"], self.all_drones[1].offset)
-    #     self.move_position(self.all_drones[1].drone_name, final_pos)
-    #     self.all_drones[1].job_status["initial_loc"] = self.all_drones[1].current_location
-    #     self.all_drones[1].job_status["final_dest"] = final_pos
-    #     self.port.change_hover_spot_status(hover_loc["port_no"], True)
-    #     self.all_drones[1].set_status("in-action", "in-air")
-    #     #drone 2
-    #     hover_loc = self.port.get_destination()
-    #     self.move_position(self.all_drones[2].drone_name, hover_loc)
-    #     self.all_drones[2].set_status("in-action", "in-destination")
-    #     self.all_drones[2].job_status["initial_loc"] = self.all_drones[2].current_location
-    #     self.all_drones[2].job_status["final_dest"] = hover_loc
-    #     #drone 3
-    #     hover_loc = self.port.get_destination()
-    #     self.move_position(self.all_drones[3].drone_name, hover_loc,1)
-    #     self.all_drones[3].set_status("in-action", "in-destination")
-    #     self.all_drones[3].job_status["initial_loc"] = self.all_drones[3].current_location
-    #     self.all_drones[3].job_status["final_dest"] = hover_loc
-        
-        
     def step(self,action):
 
         self.Try_selecting_drone_from_Start()
@@ -380,13 +325,14 @@ class environment(gym.Env):
 
 
     
-    def calculate_reward_gl(self,action, future_loc):
+    def calculate_reward_gl(self, action, future_loc):
         #pass the decoded action
         #http://lidavidm.github.io/sympy/modules/geometry/line3d.html    - used this
-        lamb = 0
-        beta = 0
+        lambda_ = self.current_drone.schedule_status # Depends on the schedule of the UAM
+        beta = self.current_drone.battery_state # Depends on the battery of the UAM
         safety = self.calculate_safety(action, future_loc)
-        formula = lamb * (np.exp(-beta)**2) + safety
+        print("safety", safety)
+        formula = lambda_ * (np.exp(-beta)**2) + safety
         return formula
     
     
