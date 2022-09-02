@@ -78,6 +78,7 @@ class ports:
                 availability = 1
             node_type = 2
             self.feature_mat[i+self.no_ports+self.no_battery_ports] = [availability, node_type, self.hover_spot_status[i]["position"][0], self.hover_spot_status[i]["position"][1]]
+        # print(self.feature_mat[:,0])
 
     def get_all_empty_ports(self):
         return {"normal_ports":self.port_status, "battery_ports":self.battery_port_status, "hover_spots": self.hover_spot_status}
@@ -373,7 +374,7 @@ class UAMs:
         
         
     def get_final_pos(self,port, offset):
-        print([port , offset, [port[0] +offset[0] , port[1] + offset[1], port[2]]])
+        # print([port , offset, [port[0] +offset[0] , port[1] + offset[1], port[2]]])
         return [port[0] - offset[0] , port[1] - offset[1], port[2]]
     
     def assign_schedule(self,port,client,choice = 0):

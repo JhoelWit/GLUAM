@@ -35,7 +35,7 @@ class environment(gym.Env):
             self.observation_space = spaces.Dict(
                                         dict(
                                             next_drone_embedding = spaces.Box(low=-cont_bound, high=cont_bound, shape=(8,), dtype=np.float32), #[battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,schedule, x, y, z ]
-                                            mask = spaces.Box(low=-cont_bound, high=cont_bound, shape=(14,), dtype=np.float32)))
+                                            mask = spaces.Box(low=-cont_bound, high=cont_bound, shape=(11,), dtype=np.float32)))
         elif type == "graph":
             self.action_space = spaces.Discrete(14) 
             self.observation_space = spaces.Dict(
@@ -45,7 +45,7 @@ class environment(gym.Env):
                 evtol_features = spaces.Box(low=-cont_bound,high=cont_bound,shape=(4,5), dtype=np.float32),
                 evtol_edge = spaces.Box(low=0.0,high=4.0,shape=(2,12), dtype=np.float32),
                 next_drone_embedding = spaces.Box(low=-cont_bound,high=cont_bound,shape=(8,),dtype=np.float32),
-                mask = spaces.Box(low=0,high=1,shape=(14,),dtype=np.float32)
+                mask = spaces.Box(low=0,high=1,shape=(11,),dtype=np.float32)
             ))
         self.type = type
         self.client = airsim.MultirotorClient()
@@ -120,7 +120,7 @@ class environment(gym.Env):
         
         #Ideally, all movements should take place here, and ports that were previously unavailable should free up
         if coded_action["action"] == "land":
-            print(["coded action", coded_action, ", current_drone:", self.current_drone.drone_name])
+            # print(["coded action", coded_action, ", current_drone:", self.current_drone.drone_name])
             new_position = coded_action["position"]
             self.complete_landing(self.current_drone.drone_name, new_position)
             #need to calculate reward but 
@@ -134,7 +134,7 @@ class environment(gym.Env):
 
             
         elif coded_action["action"] == "land-b":
-            print(["coded action", coded_action, ", current_drone:", self.current_drone.drone_name])
+            # print(["coded action", coded_action, ", current_drone:", self.current_drone.drone_name])
             new_position = coded_action["position"]
             self.complete_landing(self.current_drone.drone_name, new_position)
             #need to calculate reward but 
@@ -197,8 +197,11 @@ class environment(gym.Env):
     #        self.uam_time_update(self.current_drone,coded_action['action'])
 
         elif coded_action["action"] == "stay":
-            self.client.hoverAsync(self.current_drone.drone_name)
+            self.client.moveToZAsync(-4, self.current_drone.drone_name)
+            self.client.hoverAsync(self.current_drone.drone_name).join()
         elif coded_action["action"] == "continue":
+            pass
+        elif coded_action["action"] == "avoid collision":
             pass
         else:
             
@@ -212,7 +215,7 @@ class environment(gym.Env):
             self.current_drone.set_status('in-action','in-port')
 
         self.update_all()
-        if coded_action["action"] != "stay" and coded_action["action"] != "move" and coded_action["action"] != "move-b" and coded_action["action"] != "continue":
+        if coded_action["action"] not in ["stay", "move", "move-b", "continue"]:
             reward = self.calculate_reward_gl(coded_action['action'], coded_action["position"])
         else:
             reward = 0
@@ -222,7 +225,7 @@ class environment(gym.Env):
         self.total_timesteps +=1
         # self.debugg()
         done = self.done             #none based on time steps
-        if self.total_timesteps >= 100:
+        if self.total_timesteps >= (43200 / self.clock_speed):  # 43200 seconds in 12 hours, which is a day of operation.
             done = True
             self.done = done
         info = {}
@@ -270,10 +273,10 @@ class environment(gym.Env):
         if new_drone_no < self.no_drones:
             self.current_drone = self.all_drones[new_drone_no]
             drone = self.all_drones[new_drone_no]
-            while drone.status == 3 or drone.status == 4:   
+            while drone.status == drone.all_states["in-destination"]:   
                 # print(["current drone I am trying to choose1", drone.drone_name])
                 #do something to wait for drone 1 to reach destination, so we can start the process again
-                time.sleep(2)
+                time.sleep(1)
                 self.update_all()
                 failed_attempts+=1
                 if failed_attempts > 10: #Failsafe
@@ -301,12 +304,12 @@ class environment(gym.Env):
         if not self.current_drone: #Means this is the first step
             self.current_drone = self.all_drones[0]
             self.update_all()
-            while self.current_drone.status == 3 or self.current_drone.status == 4:   
+            while self.current_drone.status == self.current_drone.all_states["in-destination"]:   
                 time.sleep(1)
                 self.update_all()
             return 
         else:
-            while self.current_drone.status == 3 or self.current_drone.status == 4:   
+            while self.current_drone.status == self.current_drone.all_states["in-destination"]:   
                 time.sleep(1)
                 self.update_all()
                 failed_attempts += 1
@@ -353,11 +356,11 @@ class environment(gym.Env):
         else:
             beta /= 100
 
-        safety = self.calculate_safety(action, future_loc) + self.calculate_safety_2()
+        safety = self.calculate_safety(action, future_loc) + self.calculate_safety_2(action)
         formula = lambda_ * (np.exp(-beta)**2) + safety
         return formula
     
-    def calculate_safety_2(self):
+    def calculate_safety_2(self, action):
         """This is an attempt to determine intersections using 2D points, distance and velocity."""
         if self.current_drone.status != self.current_drone.all_states["in-action"]:
             return 0
@@ -409,17 +412,15 @@ class environment(gym.Env):
                     x_ = (curr_pos[0] - other_loc[0] + t_min_sep*(curr_drone_v.x_val - other_drone_v.x_val))**2
                     y_ = (curr_pos[1] - other_loc[1] + t_min_sep*(curr_drone_v.y_val - other_drone_v.y_val))**2
                     min_sep = np.sqrt(x_ + y_)  # Euclid distance
-                    print(f"minimum separation {min_sep}")
+                    # print(f"minimum separation: {min_sep}m")
 
-                    if min_sep < threshold:
-                        print(f"Drones will collide, minimum seperation is {min_sep}.")
-                        return -5
-                    else:
-                        return 5
-
-
-                   
-
+                    if 0 < min_sep < threshold:
+                        if action == "avoid collision":
+                            print(f"Drones will not collide, agent chose correctly.")
+                            return 5
+                        else:
+                            print(f"Drones will collide, agent chose incorrectly.")
+                            return -5
         return 0
 
 
@@ -553,7 +554,7 @@ class environment(gym.Env):
         None.
 
         """
-        print(["env_time", time.time() - self.start_time])
+        # print(["env_time", time.time() - self.start_time])
         for i in self.all_drones:    
             x = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position.x_val
             y = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position.y_val

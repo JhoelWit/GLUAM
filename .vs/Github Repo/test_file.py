@@ -12,7 +12,7 @@ import time
 import random
 
 
-env = environment(no_of_drones=4, type="graph")
+env = environment(no_of_drones=4, type="regular")
 # check_env(env) #used to prepare env for training
 # actions1 = {'Drone0':1,'Drone1':1,'Drone2':2,'Drone3':1}
 # actions2 = {'Drone0':3,'Drone1':1,'Drone2':2,'Drone3':1}
@@ -21,7 +21,7 @@ env = environment(no_of_drones=4, type="graph")
 
 #Randomness test
 while True:
-    action = random.randint(0,7)
+    action = random.randint(0,13)
     new_state,reward,done,info = env.step(action)
 
 

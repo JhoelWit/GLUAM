@@ -70,11 +70,12 @@ class CustomGLPolicy(BasePolicy):
         distribution,values = self.get_distribution(obs)
         # print('distribution',distribution)
         # print('values',values)
-        entropy = random.random()
-        if entropy < 0.05:
-            deterministic = False
-        else:
-            deterministic = True
+        # entropy = random.random()
+        # if entropy < 0.05:
+        #     deterministic = False
+        # else:
+        #     deterministic = True  # Leaving entropy alone for now
+        deterministic = True
         actions = distribution.get_actions(deterministic=deterministic)
         # print('actions',actions)
         log_prob = distribution.log_prob(actions)
@@ -82,7 +83,7 @@ class CustomGLPolicy(BasePolicy):
         return actions, values, log_prob
 
     def predict_values(self,obs):
-        _,values = self.get_distribution(obs)
+        _, values = self.get_distribution(obs)
         return values
 
     def get_distribution(self, obs):
@@ -126,7 +127,7 @@ class GNNFeatureExtractor(nn.Module):
         hidden_channels = 150
         output_channels = 64 #length of each graph embedding
         input_dim = 136 #length of feature vector for MLP
-        output_dim = 14 #output action dimensions
+        output_dim = 11 #output action dimensions
         self.vertiport = GCN(verti_input_channels,hidden_channels,output_channels) #input channels, hidden channels, output channels
         self.evtols = GCN(ev_input_channels,hidden_channels,output_channels) #Input channels, hidden channels, output channels
         self.output_space = GRLMLP(input_dim,output_dim) #Input dimension, output dimension
@@ -155,7 +156,7 @@ class GNNFeatureExtractor(nn.Module):
         # output = output.reshape(output.shape[0],-1)
         # log_prob = torch.argmax(output,dim=1)
 
-        return final_features,output
+        return final_features, output
 
 
 class GCN(nn.Module):
@@ -261,11 +262,12 @@ class CustomBaselinePolicy(BasePolicy):
         distribution,values = self.get_distribution(obs)
         # print('distribution',distribution)
         # print('values',values)
-        entropy = random.random()
-        if entropy < 0.05:
-            deterministic = False
-        else:
-            deterministic = True
+        # entropy = random.random()
+        # if entropy < 0.05:
+        #     deterministic = False
+        # else:
+        #     deterministic = True
+        deterministic = True
         actions = distribution.get_actions(deterministic=deterministic)
         # print('actions',actions)
         log_prob = distribution.log_prob(actions)
@@ -310,7 +312,7 @@ class BaseFeatureExtractor(nn.Module):
         hidden_channels = 100
         output_channels = 50 #length of each graph embedding
         input_dim = 50 #length of feature vector for MLP
-        output_dim = 14 #output action dimensions
+        output_dim = 11 #output action dimensions
         # self.vertiport = GCN(verti_input_channels,hidden_channels,output_channels) #input channels, hidden channels, output channels
         # self.evtols = GCN(ev_input_channels,hidden_channels,output_channels) #Input channels, hidden channels, output channels
         self.network = nn.Sequential(

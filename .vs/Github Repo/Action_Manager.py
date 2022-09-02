@@ -121,19 +121,16 @@ class GL_ActionManager:
     def __init__(self, port):
         self.port = port
         self.actions = {0 : "stay still",
-                        1 : "takeoff-1",
-                        2 : "takeoff-2",
-                        3 : "takeoff-3",
-                        4 : "takeoff-4",
-                        5 : "takeoff-5",
-                        6 : "normal-1",
-                        7 : "normal-2",
-                        8 : "battery-1",
-                        9 : "hover-1",
-                        10 : "hover-2",
-                        11 : "hover-3",
-                        12 : "hover-4",
-                        13 : "continue"}
+                        1 : "takeoff",
+                        2 : "normal-1",
+                        3 : "normal-2",
+                        4 : "battery-1",
+                        5 : "hover-1",
+                        6 : "hover-2",
+                        7 : "hover-3",
+                        8 : "hover-4",
+                        9 : "continue",
+                        10 : "avoid collision"}
 
     
     def action_decode(self,drone, action):
@@ -141,25 +138,23 @@ class GL_ActionManager:
         action count:
 
             staystill - 0
-            takeoff location one - 1
-            takeoff location two - 2
-            takeoff location three - 3
-            takeoff location four - 4
-            takeoff location five - 5
-            move to normal port 1 - 6
-            move to normal port 2 - 7
-            move to battery port 1 - 8
-            move to hover spot 1 - 9
-            move to hover spot 2 - 10
-            move to hover spot 3 - 11
-            move to hover spot 4 - 12
-            continue moving - 13
+            takeoff - 1
+            move to normal port 1 - 2
+            move to normal port 2 - 3
+            move to battery port 1 - 4
+            move to hover spot 1 - 5
+            move to hover spot 2 - 6
+            move to hover spot 3 - 7
+            move to hover spot 4 - 8
+            continue moving - 9
+            avoid collision - 10
             
 
             
     
         First check the status then assign the port/hoveringspot/takeoff/land .... etc
         Update: We will use masking so no need to check the status
+        Updateupdate: if using random walk might need to add extra conditionals to the if-elif statements
 
         Parameters
         ----------
@@ -183,9 +178,9 @@ class GL_ActionManager:
         if action == "stay still":
             return {"action" : "stay", "position" : None}
         
-        elif action in ["takeoff-1", "takeoff-2", "takeoff-3", "takeoff-4"]:
-            dest_num = int(action[-1]) - 1
-            dest = self.port.get_destination(number=dest_num)
+        elif action == "takeoff":
+            # dest_num = int(action[-1]) - 1
+            dest = self.port.get_destination(choice=0)
             final_pos = self.get_final_pos(dest, drone.offset)
             self.port.update_port(drone.port_identification)
 
@@ -194,11 +189,11 @@ class GL_ActionManager:
         elif action in ["normal-1", "normal-2"]:
             norm_num = int(action[-1]) - 1
             if self.port.get_port_status(norm_num, 'normal') is False:                    
-                final_pos = self.get_final_pos(self.port.port_status[0]["position"], drone.offset)
+                final_pos = self.get_final_pos(self.port.port_status[norm_num]["position"], drone.offset)
 
                 drone.in_battery_port = 0
                 self.port.update_port(drone.port_identification)
-                drone.port_identification = {'type':'normal','port_no':0}
+                drone.port_identification = {'type':'normal','port_no':norm_num}
 
                 #self.port.update_port(drone.port_identification)
                 self.port.change_status_normal_port(norm_num, True)
@@ -225,8 +220,13 @@ class GL_ActionManager:
                 self.port.update_port(drone.port_identification)
                 drone.port_identification = {'type':'hover','port_no':hover_num}
                 self.port.change_hover_spot_status(hover_num, True)
-
-                return {"position" : final_pos, "action": "hover"}
+                if status in [drone.all_states["in-air"], drone.all_states["in-action"]]:
+                    return {"position" : final_pos, "action": "hover"}
+                else:
+                    return {"position" : final_pos, "action": "takeoff-hover"}
+        
+        elif action == "avoid collision":
+            return {"action" : "avoid collision", "position" : drone.job_status["final_dest"]}
     
         return {"action" : "continue"}  # Mainly for the random walk, since that can't use masking. 
 
