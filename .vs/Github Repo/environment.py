@@ -25,23 +25,25 @@ class environment(gym.Env):
         self.current_drone = None
         self.state_manager = None
         self.total_timesteps = 0
-        self.clock_speed = 30
+        self.clock_speed = 300
+        self.sleep_time = 0.5 / self.clock_speed # Half a second in simulation but faster in real life
         self.start_time = time.time()                   #environment times will be in seconds
         self.env_time = 0
         cont_bound = np.finfo(np.float32).max
         if type == "regular":
             self.action_space = spaces.Discrete(14) 
             # self.observation_space = spaces.MultiDiscrete([3,3,3,3,2,2]) # Can't use discrete with location values. 
+            self.n_features = self.no_drones * 5 + 9 * 4 + 8  # number of drones times their features plus number of ports times their features + next drone features
             self.observation_space = spaces.Dict(
                                         dict(
-                                            next_drone_embedding = spaces.Box(low=-cont_bound, high=cont_bound, shape=(8,), dtype=np.float32), #[battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,schedule, x, y, z ]
+                                            next_drone_embedding = spaces.Box(low=-cont_bound, high=cont_bound, shape=(self.n_features,), dtype=np.float32), #[battery_capacity,empty_port,empty_hovering_spots,empty_battery_ports,status,schedule, x, y, z ]
                                             mask = spaces.Box(low=-cont_bound, high=cont_bound, shape=(11,), dtype=np.float32)))
         elif type == "graph":
             self.action_space = spaces.Discrete(14) 
             self.observation_space = spaces.Dict(
             dict(
-                vertiport_features = spaces.Box(low=-cont_bound,high=cont_bound,shape=(7,4), dtype=np.float32),
-                vertiport_edge = spaces.Box(low=0.0,high=9.0,shape=(2,42), dtype=np.float32),
+                vertiport_features = spaces.Box(low=-cont_bound,high=cont_bound,shape=(9,4), dtype=np.float32),
+                vertiport_edge = spaces.Box(low=0.0,high=9.0,shape=(2,72), dtype=np.float32),
                 evtol_features = spaces.Box(low=-cont_bound,high=cont_bound,shape=(4,5), dtype=np.float32),
                 evtol_edge = spaces.Box(low=0.0,high=4.0,shape=(2,12), dtype=np.float32),
                 next_drone_embedding = spaces.Box(low=-cont_bound,high=cont_bound,shape=(8,),dtype=np.float32),
@@ -58,6 +60,13 @@ class environment(gym.Env):
 
         self.env_time = (time.time() - self.start_time) *self.clock_speed
         self.total_timesteps = 0
+        self.tasks_completed = 0    # A task is considered as a drone going to a destination and returning.
+        self.good_takeoffs = 0
+        self.good_landings = 0
+        self.total_delay = 0
+        self.collisions = 0
+        self.avoided_collisions = 0
+        self.avg_battery = 0
         self.all_drones = list()
         self.port = ports(self.no_drones)
         self.graph_prop = {'vertiport_features':{},'vertiport_edge':{},
@@ -75,20 +84,17 @@ class environment(gym.Env):
             self.takeoff(self.all_drones[i].drone_name)
             # print('takeoff',drone_name)
         for i in self.all_drones:   
-            x = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position.x_val
-            y = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position.y_val
-            z = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position.z_val
-            loc = [x,y,z]
+            p = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position
+            loc = [x,y,z] = [p.x_val, p.y_val, p.z_val]
             i.drone_locs[self.all_drones.index(i)] = loc
-            i.current_location = loc
-        
-            time.sleep(1)
+            i.current_location = i.previous_location = loc
+            time.sleep(self.sleep_time)
+
         self.state_manager = StateManager(self.port)
         self.action_manager = GL_ActionManager(self.port)
-        self.client.confirmConnection()
-        self.port.get_all_port_statuses()
+        # self.client.confirmConnection()
+        # self.port.get_all_port_statuses()
         self.initial_schedule()
-        self.total_delay = 0
         # self.initial_setup()
         #do inital works here
 
@@ -114,7 +120,8 @@ class environment(gym.Env):
         self.update_all()
 
     def step(self,action):
-
+        
+        start_time = time.time()
         self.Try_selecting_drone_from_Start()
         coded_action = self.action_manager.action_decode(self.current_drone, action)
         
@@ -125,10 +132,10 @@ class environment(gym.Env):
             self.complete_landing(self.current_drone.drone_name, new_position)
             #need to calculate reward but 
             old_position = self.current_drone.current_location
-            reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
+            # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
             self.current_drone.set_status("in-action", "in-port")
             # self.current_drone.status = self.current_drone.all_states['in-port']
-            self.current_drone.update_battery(reduce) #Ditto
+            # self.current_drone.update_battery(reduce) #Ditto
             self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
             self.current_drone.job_status["final_dest"] = new_position
 
@@ -139,9 +146,9 @@ class environment(gym.Env):
             self.complete_landing(self.current_drone.drone_name, new_position)
             #need to calculate reward but 
             old_position = self.current_drone.current_location
-            reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
+            # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
             self.current_drone.set_status("in-action", "battery-port")
-            self.current_drone.update_battery(reduce) #Ditto
+            # self.current_drone.update_battery(reduce) #Ditto
             self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
             self.current_drone.job_status["final_dest"] = new_position
            # self.uam_time_update(self.current_drone,coded_action['action'])
@@ -151,8 +158,8 @@ class environment(gym.Env):
             new_position = coded_action["position"]
             self.complete_takeoff(self.current_drone.drone_name, new_position)
             old_position = self.current_drone.current_location
-            reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
-            self.current_drone.update_battery(reduce) #Ditto
+            # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
+            # self.current_drone.update_battery(reduce) #Ditto
             self.current_drone.set_status("in-action", "in-destination")
             self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
             self.current_drone.job_status["final_dest"] = new_position
@@ -166,8 +173,8 @@ class environment(gym.Env):
             new_position = coded_action["position"]
             self.move_position(self.current_drone.drone_name, new_position,join=0)
             old_position = self.current_drone.current_location
-            reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
-            self.current_drone.update_battery(reduce) #Ditto
+            # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
+            # self.current_drone.update_battery(reduce) #Ditto
             self.current_drone.status = self.current_drone.all_states['in-air']
             self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
             self.current_drone.job_status["final_dest"] = new_position
@@ -177,8 +184,8 @@ class environment(gym.Env):
             new_position = coded_action["position"]
             self.complete_takeoff_hover(self.current_drone.drone_name,new_position)
             old_position = self.current_drone.current_location
-            reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
-            self.current_drone.update_battery(reduce) #Ditto
+            # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
+            # self.current_drone.update_battery(reduce) #Ditto
             self.current_drone.status = self.current_drone.all_states['in-air']
             self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
             self.current_drone.job_status["final_dest"] = new_position
@@ -188,8 +195,8 @@ class environment(gym.Env):
             new_position = coded_action["position"]
             self.change_port(self.current_drone.drone_name, new_position)
             old_position = self.current_drone.current_location            
-            reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
-            self.current_drone.update_battery(reduce) #Ditto
+            # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
+            # self.current_drone.update_battery(reduce) #Ditto
             self.current_drone.job_status['final_dest'] = new_position
             self.current_drone.status_to_set = self.current_drone.all_states['battery-port']
             self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
@@ -197,8 +204,10 @@ class environment(gym.Env):
     #        self.uam_time_update(self.current_drone,coded_action['action'])
 
         elif coded_action["action"] == "stay":
-            self.client.moveToZAsync(-4, self.current_drone.drone_name)
-            self.client.hoverAsync(self.current_drone.drone_name).join()
+            if self.current_drone.status == self.current_drone.all_states["in-air"]:
+                self.client.moveToZAsync(-4, self.current_drone.drone_name)
+                time.sleep(self.sleep_time)
+                self.client.hoverAsync(self.current_drone.drone_name).join()
         elif coded_action["action"] == "continue":
             pass
         elif coded_action["action"] == "avoid collision":
@@ -215,22 +224,21 @@ class environment(gym.Env):
             self.current_drone.set_status('in-action','in-port')
 
         self.update_all()
-        if coded_action["action"] not in ["stay", "move", "move-b", "continue"]:
-            reward = self.calculate_reward_gl(coded_action['action'], coded_action["position"])
-        else:
-            reward = 0
+        reward = self.calculate_reward_gl(coded_action['action'])
+        # print(f"reward: {reward}")
         self.select_next_drone()
         new_state = self._get_obs()
         self.env_time = (time.time() - self.start_time)  * self.clock_speed                #reduce this if the simulation is too fast
-        self.total_timesteps +=1
+        self.total_timesteps += 1
         # self.debugg()
         done = self.done             #none based on time steps
-        if self.total_timesteps >= (43200 / self.clock_speed):  # 43200 seconds in 12 hours, which is a day of operation.
+        if self.total_timesteps >= (432000 / self.clock_speed):  # 43200 seconds in 12 hours, which is a day of operation.
             done = True
             self.done = done
         info = {}
         #todo
         #update all the drones
+        self.step_time = time.time() - start_time
 
         return new_state,reward,done,info
     
@@ -271,20 +279,29 @@ class environment(gym.Env):
             new_drone_no = old_drone_no + 1
             
         if new_drone_no < self.no_drones:
-            self.current_drone = self.all_drones[new_drone_no]
-            drone = self.all_drones[new_drone_no]
-            while drone.status == drone.all_states["in-destination"]:   
+            drone = self.current_drone = self.all_drones[new_drone_no]
+            self.update_all()
+            loc1 = drone.current_location
+            collision = self.client.simGetCollisionInfo(self.current_drone.drone_name)
+            while drone.status == drone.all_states["in-destination"] or \
+            ((collision.has_collided == True and collision.object_name[:-1] == 'Drone') and (self.calculate_distance(loc1, drone.current_location) < 3)):   
                 # print(["current drone I am trying to choose1", drone.drone_name])
                 #do something to wait for drone 1 to reach destination, so we can start the process again
-                time.sleep(1)
+                time.sleep(self.sleep_time)
                 self.update_all()
-                failed_attempts+=1
-                if failed_attempts > 10: #Failsafe
-                    #make done = 1 instead of this
-                    self.done = True
-                    new_drone_no = old_drone_no+1
-                    break
-
+                collision = self.client.simGetCollisionInfo(self.current_drone.drone_name)
+                failed_attempts += 1
+                if failed_attempts > 30: #Failsafe
+                    self.client.reset()
+                    time.sleep(3)
+                    self.enable_control(False)
+                    time.sleep(self.sleep_time)
+                    self.enable_control(True)
+                    self.port.reset_ports()
+                    for i in range(self.no_drones):
+                        self.takeoff(self.all_drones[i].drone_name,join=1)
+                    self.initial_schedule()
+                    return
         else:
             self.current_drone = self.all_drones[0]
         self.update_all()
@@ -302,27 +319,56 @@ class environment(gym.Env):
         """
         failed_attempts = 0
         if not self.current_drone: #Means this is the first step
-            self.current_drone = self.all_drones[0]
+            drone = self.current_drone = self.all_drones[0]
             self.update_all()
-            while self.current_drone.status == self.current_drone.all_states["in-destination"]:   
-                time.sleep(1)
+            loc1 = self.current_drone.current_location
+            collision = self.client.simGetCollisionInfo(self.current_drone.drone_name)
+            while drone.status == drone.all_states["in-destination"] or \
+            ((collision.has_collided == True and collision.object_name[:-1] == 'Drone') and (self.calculate_distance(loc1, drone.current_location) < 3)): 
+                time.sleep(self.sleep_time) 
                 self.update_all()
-            return 
-        else:
-            while self.current_drone.status == self.current_drone.all_states["in-destination"]:   
-                time.sleep(1)
-                self.update_all()
+                collision = self.client.simGetCollisionInfo(self.current_drone.drone_name)
                 failed_attempts += 1
                 if failed_attempts > 30: #Failsafe
-                    #make done = 1 instead of this
-                    self.done =True 
+                    self.client.reset()
+                    time.sleep(3)
+                    self.enable_control(False)
+                    time.sleep(self.sleep_time)
+                    self.enable_control(True)
+                    self.port.reset_ports()
+                    for i in range(self.no_drones):
+                        self.takeoff(self.all_drones[i].drone_name,join=1)
+                    self.initial_schedule()
+                    return 
+        else:
+            self.update_all()
+            drone = self.current_drone
+            loc1 = self.current_drone.current_location
+            collision = self.client.simGetCollisionInfo(self.current_drone.drone_name)
+            while drone.status == drone.all_states["in-destination"] or \
+            ((collision.has_collided == True and collision.object_name[:-1] == 'Drone') and (self.calculate_distance(loc1, drone.current_location) < 3)): 
+                time.sleep(self.sleep_time)
+                self.update_all()
+                collision = self.client.simGetCollisionInfo(self.current_drone.drone_name)
+                failed_attempts += 1
+                if failed_attempts > 30: #Failsafe
+                    self.client.reset()
+                    time.sleep(3)
+                    self.enable_control(False)
+                    time.sleep(self.sleep_time)
+                    self.enable_control(True)
+                    self.port.reset_ports()
+                    for i in range(self.no_drones):
+                        self.takeoff(self.all_drones[i].drone_name,join=1)
+                    self.initial_schedule()
+                    return
 
     
-    def enable_control(self, control):
+    def enable_control(self, control = False):
         for i in range(self.no_drones):
-            self.client.enableApiControl(False, self.all_drones[i].drone_name)
+            self.client.enableApiControl(control, self.all_drones[i].drone_name)
         for i in range(self.no_drones):
-             self.client.armDisarm(False, self.all_drones[i].drone_name)
+             self.client.armDisarm(control, self.all_drones[i].drone_name)
 
     def _get_obs(self):
         states = self.state_manager.get_obs(self.current_drone, self.type, self.graph_prop)
@@ -333,31 +379,60 @@ class environment(gym.Env):
 
 
     
-    def calculate_reward_gl(self, action, future_loc):
+    def calculate_reward_gl(self, action):
         #pass the decoded action
         #http://lidavidm.github.io/sympy/modules/geometry/line3d.html    - used this
         drone = self.current_drone
         ref_states = drone.all_states
         ref_bat = drone.all_battery_states
+        Tau = 0
+        gamma = 0
+        w1 = w2 = w3 = w4 = w5 = 1 / 5
 
-        lambda_ = 0 # Depends on the battery
-        if drone.status_to_set == ref_states["battery-port"] and drone.battery_state == ref_bat["sufficient"]:
-            lambda_ = 1
-        elif drone.status_to_set == ref_states["in-action"] and drone.battery_state == ref_bat["sufficient"]:
-            lambda_ = 1
-        elif drone.battery_state == ref_bat["critical"]:
-            lambda_ = -1
+        if action == "takeoff": # Takeoff
+            if drone.schedule_status == 0 and drone.battery_state in [ref_bat["sufficient"], ref_bat["full"]]:
+                self.good_takeoffs += 1
+                # drone.good_takeoffs += 1
+                Tau = 5
+            else:
+                Tau = -5
         
-        beta = drone.upcoming_schedule["landing-delay"] if drone.status in [ref_states["in-action"], ref_states["in-air"]] \
-        else drone.upcoming_schedule["takeoff-delay"] # Depends on the delay
+        if "land" in action: # Landing
+            if drone.schedule_status in [0, 1] and drone.battery_state in [ref_bat["sufficient"], ref_bat["full"]]:
+                self.good_landings += 1
+                gamma = 5
+            else:
+                gamma = -5
 
-        if not beta or (drone.schedule_status == 1): # If no delay or if drone is early.
-            beta = 0
+        # #Penalized for bad takeoffs 
+        # Tao_bad = -5 + 5 * np.exp(-(drone.tasks_completed - drone.good_takeoffs))
+        # if Tao_bad > 0: # More good takeoffs than bad
+        #     Tao_bad = 5
+
+        #Penalized for bad landings - useful for delayed reward if we implement that
+        # gamma_bad = -5 + 5 * np.exp(-(drone.tasks_completed - drone.good_takeoffs))
+
+        # Depends on the battery
+        if drone.battery_remaining == ref_bat["critical"]:
+            lambda_ = -5
         else:
-            beta /= 100
+            lambda_ = (drone.battery_remaining / 100) * 5
+        
+        beta = drone.upcoming_schedule["delay"] # Depends on the delay
+        if not beta: # If no delay or if drone is early.
+            beta = 0
+        beta_ = -5 + 10 * np.exp(-beta/60)
 
-        safety = self.calculate_safety(action, future_loc) + self.calculate_safety_2(action)
-        formula = lambda_ * (np.exp(-beta)**2) + safety
+        safety = self.calculate_safety_2(action)
+
+        w1 += 0.5 / 10 # 3rd most important
+        w2 += 0.5 / 10 # 3rd most important
+        w3 += 1 / 10 # 2nd most important
+        w4 -= 1 / 10  # 4th most important
+        w5 += 2 / 10  # Most important
+
+        formula = w1*gamma + w2*Tau + w3*lambda_ + w4*beta_ + w5*safety
+
         return formula
     
     def calculate_safety_2(self, action):
@@ -381,13 +456,9 @@ class environment(gym.Env):
                 intersection = curr_segment.intersect(other_segment)
                 if intersection:  # Check the distance between each drone and the intersection point, and calc the times.
 
-                    intersection = np.array(intersection.args[0].coordinates).astype(np.float32)
-                    curr_segment = np.array(curr_segment.args[0].coordinates).astype(np.float32)
-                    other_segment = np.array(other_segment.args[0].coordinates).astype(np.float32)
-
-                    curr_drone_v = self.client.getMultirotorState(vehicle_name=curr_drone.drone_name).kinematics_estimated.linear_velocity
-                    other_drone_v = self.client.getMultirotorState(vehicle_name=other_drone.drone_name).kinematics_estimated.linear_velocity
-
+                    # intersection = np.array(intersection.args[0].coordinates).astype(np.float32)
+                    # curr_segment = np.array(curr_segment.args[0].coordinates).astype(np.float32)
+                    # other_segment = np.array(other_segment.args[0].coordinates).astype(np.float32)
 
                     # inter_norm = np.linalg.norm(intersection)
                     # curr_norm, curr_vnorm = np.linalg.norm(curr_segment), np.linalg.norm(np.array([curr_drone_v.x_val, curr_drone_v.y_val]).astype(np.float32))
@@ -404,6 +475,9 @@ class environment(gym.Env):
                     # else:
                     #     return 5
 
+                    curr_drone_v = self.client.getMultirotorState(vehicle_name=curr_drone.drone_name).kinematics_estimated.linear_velocity
+                    other_drone_v = self.client.getMultirotorState(vehicle_name=other_drone.drone_name).kinematics_estimated.linear_velocity
+
                     numerator = 2*(curr_drone_v.x_val - other_drone_v.x_val)*(curr_pos[0] - other_loc[0]) + \
                                 2*(curr_drone_v.y_val - other_drone_v.y_val)*(curr_pos[1] - other_loc[1])
                     denominator = 2*(curr_drone_v.x_val - other_drone_v.x_val)**2 + 2*(curr_drone_v.y_val - other_drone_v.y_val)**2
@@ -416,10 +490,12 @@ class environment(gym.Env):
 
                     if 0 < min_sep < threshold:
                         if action == "avoid collision":
-                            print(f"Drones will not collide, agent chose correctly.")
+                            # print(f"Drones will not collide, agent chose correctly: minimum separation is {min_sep}m")
+                            self.avoided_collisions += 1
                             return 5
                         else:
-                            print(f"Drones will collide, agent chose incorrectly.")
+                            # print(f"Drones will collide, agent chose incorrectly.")
+                            self.collisions += 1
                             return -5
         return 0
 
@@ -555,17 +631,22 @@ class environment(gym.Env):
 
         """
         # print(["env_time", time.time() - self.start_time])
+        self.tasks_completed = 0
+        self.total_delay = 0
+        self.avg_battery = 0
         for i in self.all_drones:    
-            x = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position.x_val
-            y = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position.y_val
-            z = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position.z_val
-            loc = [x,y,z]
+            p = self.client.getMultirotorState(i.drone_name).kinematics_estimated.position
+            loc = [x,y,z] = [p.x_val, p.y_val, p.z_val]
             i.current_location = loc
             i.drone_locs[self.all_drones.index(i)] = loc
             self.env_time = (time.time() - self.start_time) * self.clock_speed
             i.update(loc,self.client,self.port,self.env_time)
             i.get_state_status()
+            self.tasks_completed += i.tasks_completed
+            self.avg_battery += i.battery_remaining
             self.drone_feature_mat[self.all_drones.index(i)] = [i.battery_state, i.status, i.schedule_status, x, y] 
+            self.total_delay += i.upcoming_schedule["total-delay"]
+        self.avg_battery /= self.no_drones
         self.port.update_all()
         self.graph_prop['vertiport_features'] = self.port.feature_mat
         self.graph_prop['evtol_features'] = self.drone_feature_mat
@@ -589,7 +670,7 @@ class environment(gym.Env):
     def reset(self):
         print('resetting')
         self.client.reset()
-        time.sleep(5)
+        time.sleep(3)
         self.enable_control(False)
         self._initialize()
         self.current_drone = self.all_drones[0]

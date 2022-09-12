@@ -171,6 +171,7 @@ class GL_ActionManager:
         """
         action = self.actions[action]   # Converting to a string for readability. 
         status = drone.status
+        # print(f"action {action}")
 
         if action == "continue":
             return {'action':'continue'}
@@ -180,7 +181,8 @@ class GL_ActionManager:
         
         elif action == "takeoff":
             # dest_num = int(action[-1]) - 1
-            dest = self.port.get_destination(choice=0)
+            # dest = self.port.get_destination(choice=0)
+            dest = drone.upcoming_schedule["end-port"]
             final_pos = self.get_final_pos(dest, drone.offset)
             self.port.update_port(drone.port_identification)
 

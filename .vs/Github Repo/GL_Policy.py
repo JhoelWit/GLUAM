@@ -164,7 +164,9 @@ class GCN(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, out_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.conv3 = GCNConv(hidden_channels, hidden_channels)
+        self.conv4 = GCNConv(hidden_channels, out_channels)
         self.Leaky_ReLU = nn.LeakyReLU(negative_slope=0.1)
         self.BatchNorm = BatchNorm(in_channels,track_running_stats=True) #Supposedly works the same as BatchNorm1d
 
@@ -177,6 +179,10 @@ class GCN(nn.Module):
         x = self.conv1(x, edge_index)
         x = self.Leaky_ReLU(x)
         x = self.conv2(x, edge_index)
+        x = self.Leaky_ReLU(x)
+        x = self.conv3(x, edge_index)
+        x = self.Leaky_ReLU(x)
+        x = self.conv4(x, edge_index)
         # print('x without pooling',x.shape)
 
         #Pooling for the graph embedding, just a mean pool
@@ -189,9 +195,11 @@ class GRLMLP(nn.Module):
         hidden1 = 128
         hidden2 = 64
         self.input = nn.Linear(input_dim,hidden1)
-        self.hidden = nn.Linear(hidden1,hidden2)
+        self.hidden_layer = nn.Linear(hidden1, hidden1)
+        self.hidden_layer2 = nn.Linear(hidden1,hidden2)
         self.output = nn.Linear(hidden2,output_dim)
         self.Leaky_ReLU = nn.LeakyReLU(negative_slope=0.1)
+        self.tanh = nn.Tanh()
 
     def forward(self, x, mask=None):
 
@@ -201,12 +209,17 @@ class GRLMLP(nn.Module):
  
         #Forward propogation
         h1 = self.input(x)
-        l1 = self.Leaky_ReLU(h1)
+        l1 = self.tanh(h1)
 
-        h2 = self.hidden(l1)
-        l2 = self.Leaky_ReLU(h2)
+        h2 = self.hidden_layer(l1)
+        # l2 = self.Leaky_ReLU(h2)
+        l2 = self.tanh(h2)
+
+        h3 = self.hidden_layer2(l2)
+        l3 = self.tanh(h3)
+
         # print('mask',mask)
-        ypred = self.output(l2)
+        ypred = self.output(l3)
         ypred[mask] = -inf
         return torch.log_softmax(ypred,dim = -1)
        
@@ -308,7 +321,7 @@ class CustomBaselinePolicy(BasePolicy):
 class BaseFeatureExtractor(nn.Module):
     def __init__(self): #This custom GNN receives the obs dict for the action log-probabilities
         super(BaseFeatureExtractor,self).__init__()
-        input_channels = 8
+        input_channels = 64
         hidden_channels = 100
         output_channels = 50 #length of each graph embedding
         input_dim = 50 #length of feature vector for MLP
@@ -317,9 +330,11 @@ class BaseFeatureExtractor(nn.Module):
         # self.evtols = GCN(ev_input_channels,hidden_channels,output_channels) #Input channels, hidden channels, output channels
         self.network = nn.Sequential(
                 nn.Linear(input_channels,hidden_channels),
-                nn.LeakyReLU(),
+                nn.LeakyReLU(negative_slope=0.1),
                 nn.Linear(hidden_channels,hidden_channels),
-                nn.LeakyReLU(),
+                nn.LeakyReLU(negative_slope=0.1),
+                nn.Linear(hidden_channels, hidden_channels),
+                nn.LeakyReLU(negative_slope=0.1),
                 nn.Linear(hidden_channels,output_channels)
         )
         self.output_space = BaseMLP(input_dim,output_dim) #Input dimension, output dimension
@@ -343,8 +358,10 @@ class BaseMLP(nn.Module):
         hidden2 = 64
         self.input = nn.Linear(input_dim,hidden1)
         self.hidden = nn.Linear(hidden1,hidden2)
+        self.hidden2 = nn.Linear(hidden1, hidden2)
         self.output = nn.Linear(hidden2,output_dim)
         self.Leaky_ReLU = nn.LeakyReLU(negative_slope=0.1)
+        self.tanh = nn.Tanh()
 
     def forward(self, x, mask=None):
 
@@ -354,12 +371,16 @@ class BaseMLP(nn.Module):
  
         #Forward propogation
         h1 = self.input(x)
-        l1 = self.Leaky_ReLU(h1)
+        # l1 = self.Leaky_ReLU(h1)
+        l1 = self.tanh(h1)
 
         h2 = self.hidden(l1)
-        l2 = self.Leaky_ReLU(h2)
+        l2 = self.tanh(h2)
+
+        h3 = self.hidden2(l2)
+        l3 = self.tanh(h3)
         # print('mask',mask)
-        ypred = self.output(l2)
+        ypred = self.output(l3)
         ypred[mask] = -inf
         return torch.log_softmax(ypred,dim = -1)
 

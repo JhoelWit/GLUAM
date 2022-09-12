@@ -21,7 +21,7 @@ env = environment(no_of_drones=4, type="regular")
 
 #Randomness test
 while True:
-    action = random.randint(0,13)
+    action = random.randint(0,10)
     new_state,reward,done,info = env.step(action)
 
 

@@ -73,7 +73,7 @@ class StateManager:
         empty_battery_ports = self.ports.get_availability_battery_ports(drone_locs)       
         status = drone.get_status()
         schedule = drone.get_state_status() 
-        states = np.array([battery_capacity,
+        next_embedding = np.array([battery_capacity,
                             empty_port,
                             empty_hovering_spots,
                             empty_battery_ports,
@@ -81,11 +81,12 @@ class StateManager:
                             schedule, 
                             drone.current_location[0], 
                             drone.current_location[1]])
+        states = np.hstack((graph_prop["vertiport_features"].flatten(), graph_prop["evtol_features"].flatten(), next_embedding))
         if type == "regular":
             return dict(next_drone_embedding = states, mask = generate_mask())
             
         elif type == "graph":
-            graph_prop['next_drone_embedding'] = states
+            graph_prop['next_drone_embedding'] = next_embedding
             graph_prop["mask"] = generate_mask()
             return graph_prop
     
