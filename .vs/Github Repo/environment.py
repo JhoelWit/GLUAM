@@ -7,7 +7,7 @@ Created on Wed Apr 20 18:48:45 2022
 from os import environ
 from req_cls import UAMs,ports
 import airsim
-from Action_Manager import ActionManager, GL_ActionManager
+from Action_Manager import ActionManager, GL_ActionManager, FCFS_ActionManager
 from State_manager import StateManager, GL_StateManager
 from gym import spaces
 import gym
@@ -19,16 +19,15 @@ from sympy.geometry import Segment3D, Segment2D
 
 class environment(gym.Env):
     metadata = {'render.modes': ['human']}
-    def __init__(self, no_of_drones, type):
+    def __init__(self, no_of_drones, type, test = False):
         super(environment,self).__init__()
+        self.test = test
         self.no_drones = no_of_drones
         self.current_drone = None
         self.state_manager = None
         self.total_timesteps = 0
         self.clock_speed = 300
         self.sleep_time = 0.5 / self.clock_speed # Half a second in simulation but faster in real life
-        self.start_time = time.time()                   #environment times will be in seconds
-        self.env_time = 0
         cont_bound = np.finfo(np.float32).max
         if type == "regular":
             self.action_space = spaces.Discrete(14) 
@@ -57,11 +56,16 @@ class environment(gym.Env):
         #every step can be counted as 20 seconds (or whatever is better). not using actual times
 
     def _initialize(self):
-
+        self.start_time = time.time()                   #environment times will be in seconds
         self.env_time = (time.time() - self.start_time) *self.clock_speed
         self.total_timesteps = 0
         self.tasks_completed = 0    # A task is considered as a drone going to a destination and returning.
         self.good_takeoffs = 0
+        self.test_reward = 0
+        self.test_step = 0
+        self.test_land_queue = []
+        self.test_takeoff_queue = []
+        self.test_battery = 0
         self.good_landings = 0
         self.total_delay = 0
         self.collisions = 0
@@ -91,12 +95,14 @@ class environment(gym.Env):
             time.sleep(self.sleep_time)
 
         self.state_manager = StateManager(self.port)
-        self.action_manager = GL_ActionManager(self.port)
+        if self.test == "FCFS":
+            self.action_manager = FCFS_ActionManager(self.port)
+        else:
+            self.action_manager = GL_ActionManager(self.port)
         # self.client.confirmConnection()
         # self.port.get_all_port_statuses()
         self.initial_schedule()
         # self.initial_setup()
-        #do inital works here
 
         print('environment initialized')
 
@@ -108,6 +114,10 @@ class environment(gym.Env):
             choice = random.randint(0,1) #Controls whether a destination or hover port is picked
             # choice = 0 #All UAMs start by going to destinations
             drone.assign_schedule(port=self.port,client=self.client,choice = choice)
+            if drone.job_status['final_dest'] in [[-8.5, 5, -5], [-9, -4, -5], [-4, 10, -5], [-3, -7, -5], [2, 8, -5], [4, -6.5, -5]]:
+                self.test_land_queue.append(drone)
+            else:
+                self.test_takeoff_queue.append(drone) #Added for first-come first-serve
             initial_des = drone.job_status['final_dest']
             if initial_des in self.port.hover_spots:
                 drone.set_status("in-action", "in-air")
@@ -123,7 +133,10 @@ class environment(gym.Env):
         
         start_time = time.time()
         self.Try_selecting_drone_from_Start()
-        coded_action = self.action_manager.action_decode(self.current_drone, action)
+        if self.test == "FCFS":
+            coded_action, self.test_takeoff_queue, self.test_land_queue = self.action_manager.action_decode(self.current_drone, self.test_takeoff_queue, self.test_land_queue)
+        else:
+            coded_action = self.action_manager.action_decode(self.current_drone, action)
         
         #Ideally, all movements should take place here, and ports that were previously unavailable should free up
         if coded_action["action"] == "land":
@@ -225,20 +238,31 @@ class environment(gym.Env):
 
         self.update_all()
         reward = self.calculate_reward_gl(coded_action['action'])
+        self.test_reward += reward
         # print(f"reward: {reward}")
         self.select_next_drone()
         new_state = self._get_obs()
         self.env_time = (time.time() - self.start_time)  * self.clock_speed                #reduce this if the simulation is too fast
         self.total_timesteps += 1
+        self.test_battery += self.avg_battery
         # self.debugg()
         done = self.done             #none based on time steps
-        if self.total_timesteps >= (432000 / self.clock_speed):  # 43200 seconds in 12 hours, which is a day of operation.
+        if self.total_timesteps == (432000 / self.clock_speed) and self.test:  # 43200 seconds in 12 hours, which is a day of operation.
+            self.total_delay = 0
+            self.test_step /= self.total_timesteps
             done = True
             self.done = done
+            for i in self.all_drones:
+                i.assign_schedule(self.port)
+                self.total_delay += i.upcoming_schedule["total-delay"]
+            return self.test_reward, self.collisions, self.total_delay, self.good_takeoffs, self.good_landings, self.test_battery / self.total_timesteps, self.test_step
+        elif self.total_timesteps == (432000 / self.clock_speed):
+            self.done = done = True
         info = {}
         #todo
         #update all the drones
         self.step_time = time.time() - start_time
+        self.test_step += self.step_time
 
         return new_state,reward,done,info
     
@@ -481,6 +505,8 @@ class environment(gym.Env):
                     numerator = 2*(curr_drone_v.x_val - other_drone_v.x_val)*(curr_pos[0] - other_loc[0]) + \
                                 2*(curr_drone_v.y_val - other_drone_v.y_val)*(curr_pos[1] - other_loc[1])
                     denominator = 2*(curr_drone_v.x_val - other_drone_v.x_val)**2 + 2*(curr_drone_v.y_val - other_drone_v.y_val)**2
+                    if denominator == 0:
+                        return 0
                     t_min_sep = - numerator / denominator
 
                     x_ = (curr_pos[0] - other_loc[0] + t_min_sep*(curr_drone_v.x_val - other_drone_v.x_val))**2

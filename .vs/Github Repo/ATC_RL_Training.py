@@ -41,6 +41,7 @@ class TensorboardCallback(BaseCallback):
         if self.num_timesteps % self.ep_len == 0:
             self.logger.record_mean('ep_mean_tasks_completed', tasks_completed[0]) #indexing 0 since the output is a list for some reason...
             self.logger.record_mean('ep_mean_total_delay', total_delay[0]) 
+            self.logger.record("ep_test_total_delay", total_delay[0])
             self.logger.record_mean('ep_mean_collisions', collisions[0])
             self.logger.record_mean("ep_mean_avoided_collisions", avoided_collisions[0])
             self.logger.record_mean("ep_mean_good_takeoffs", good_takeoffs[0])
@@ -56,13 +57,17 @@ class TensorboardCallback(BaseCallback):
         return True #No need to experiment with early stopping yet
 
 custom_callback = TensorboardCallback(ep_len = 1439,log_freq= 10000, save_freq=10000, save_path='./ATC_Model/',
-                                         name_prefix='ATC_RL_Model_9_11_22') 
-       
+                                         name_prefix='ATC_RL_Model_9_14_22') 
+
 # env = DummyVecEnv([lambda: environment(5)])
 # env = SubprocVecEnv([lambda: environment(5)])
 
 env = environment(no_of_drones=4, type="regular")
 
-model = PPO(CustomBaselinePolicy,env=env,tensorboard_log='ATC_RL_Model/',verbose=1,n_steps=20000,batch_size=10000,gamma=1,learning_rate=0.00001,device='cuda')
-model.learn(total_timesteps=1_000_000,callback=custom_callback)
-model.save("Final_ATC_RL_model")
+#Loading a model to continue training
+model = PPO.load("ATC_Model/ATC_RL_Model_9_11_22_430000_steps", env=env, verbose=1, n_steps=20_000,batch_size=10_000,gamma=1,learning_rate=0.00001, tensorboard_log='ATC_RL_Model/', device="cuda")
+model.learn(total_timesteps=2_000_000, callback=custom_callback, reset_num_timesteps=False)
+
+# model = PPO(CustomBaselinePolicy,env=env,tensorboard_log='ATC_RL_Model/',verbose=1,n_steps=20000,batch_size=10000,gamma=1,learning_rate=0.00001,device='cuda')
+# model.learn(total_timesteps=2_000_000,callback=custom_callback)
+model.save("Final_ATC_RL_model_9_14_22")

@@ -95,6 +95,7 @@ class ports:
             if self.port_status[i]["occupied"] == False:
                 self.change_status_normal_port(self.port_status[i]['port_no'],True)
                 return self.port_status[i]
+        return None
     
     def get_empty_battery_port(self):
         for i in range(self.no_battery_ports):
@@ -108,6 +109,7 @@ class ports:
             if self.hover_spot_status[i]["occupied"] == False:
                 self.change_hover_spot_status(self.hover_spot_status[i]['port_no'],True)
                 return self.hover_spot_status[i]
+        return None
 
     def get_destination(self, choice = 0, number = None):
         if number:
@@ -329,7 +331,7 @@ class UAMs:
         if self.status == self.all_states['in-action']: 
             if self.status_to_set == self.all_states['in-destination']: 
                 dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1])
-                if dist < 0.25: #Drone reached destination and is ready for the next task
+                if dist < 0.75: #Drone reached destination and is ready for the next task
                     self.set_status('in-destination','in-action')
                     self.tasks_completed += 1
                 else:
@@ -338,7 +340,7 @@ class UAMs:
 
             elif self.status_to_set == self.all_states['battery-port']:
                 dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1])
-                if dist < 0.25: #Drone reached the battery port and is ready to charge
+                if dist < 0.75: #Drone reached the battery port and is ready to charge
                     client.landAsync(vehicle_name = self.drone_name)
                     self.in_battery_port = 1
                     self.set_status('battery-port','in-action')
@@ -350,7 +352,7 @@ class UAMs:
 
             elif self.status_to_set == self.all_states['in-air']:
                 dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1])
-                if dist < 0.25: #Drone reached the hover spot and is ready for the next task
+                if dist < 0.75: #Drone reached the hover spot and is ready for the next task
                     client.hoverAsync(vehicle_name = self.drone_name)
                     old_position = current_loc
                     new_position = self.job_status['final_dest']
@@ -363,7 +365,7 @@ class UAMs:
                     time.sleep(self.sleep_time)
             elif self.status_to_set == self.all_states['in-port']:
                 dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1])
-                if dist < 0.25: #Drone reached destination and is ready for the next task
+                if dist < 0.75: #Drone reached destination and is ready for the next task
                     self.set_status('in-port','in-action')
                 else:
                     final_pos = self.job_status['final_dest']
@@ -404,7 +406,7 @@ class UAMs:
         # print([port , offset, [port[0] +offset[0] , port[1] + offset[1], port[2]]])
         return [port[0] - offset[0] , port[1] - offset[1], port[2]]
     
-    def assign_schedule(self,port,client,choice = 0):
+    def assign_schedule(self,port,client = None,choice = 0):
         """
         Instead of the schedule class, everytime the drone reaches its destination(fake ports) I assign another schedule. 
 
@@ -439,13 +441,13 @@ class UAMs:
         """
         threshold = 300 # 5 minutes
         if self.status == self.all_states['in-air'] or self.status == self.all_states['in-action']:
-            if (self.upcoming_schedule["landing-time"] - threshold <= self.upcoming_schedule['time'] <= self.upcoming_schedule["landing-time"] + threshold):
+            if (self.upcoming_schedule["landing-time"] - threshold) <= self.upcoming_schedule['time'] <= (self.upcoming_schedule["landing-time"] + threshold):
                 self.schedule_status = 0
                 return 0
-            elif ( self.upcoming_schedule['time'] <= self.upcoming_schedule["landing-time"] - threshold):
+            elif (self.upcoming_schedule['time']) <= (self.upcoming_schedule["landing-time"] - threshold):
                 self.schedule_status = 1
                 return 1
-            elif (self.upcoming_schedule["landing-time"] + threshold <= self.upcoming_schedule['time']): # Late
+            elif (self.upcoming_schedule["landing-time"] + threshold) <= (self.upcoming_schedule['time']): # Late
                 self.schedule_status = 2
                 self.upcoming_schedule["delay"] = self.upcoming_schedule["time"] - self.upcoming_schedule["landing-time"] 
                 return 2
