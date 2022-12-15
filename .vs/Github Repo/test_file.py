@@ -12,7 +12,7 @@ import time
 import random
 
 
-env = environment(no_of_drones=4, type="graph", test=False)
+env = environment(no_of_drones=4, type="graph", test=False, noise=True)
 # check_env(env) #used to prepare env for training
 # actions1 = {'Drone0':1,'Drone1':1,'Drone2':2,'Drone3':1}
 # actions2 = {'Drone0':3,'Drone1':1,'Drone2':2,'Drone3':1}

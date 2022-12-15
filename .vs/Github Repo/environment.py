@@ -18,10 +18,13 @@ import numpy as np
 from sympy.geometry import Segment3D, Segment2D
 
 class environment(gym.Env):
+    '''Test can be None or FCFS'''
     metadata = {'render.modes': ['human']}
-    def __init__(self, no_of_drones, type, test = False):
+    def __init__(self, no_of_drones, type, test = False, noise=False):
         super(environment,self).__init__()
         self.test = test
+        self.noise = noise
+        self.noise_percent = 0.05
         self.no_drones = no_of_drones
         self.current_drone = None
         self.state_manager = None
@@ -111,8 +114,8 @@ class environment(gym.Env):
         # first = 0
         self.done = False
         for drone in self.all_drones:
-            choice = random.randint(0,1) #Controls whether a destination or hover port is picked
-            # choice = 0 #All UAMs start by going to destinations
+            # choice = random.randint(0,1) #Controls whether a destination or hover port is picked
+            choice = 0 #All UAMs start by going to destinations
             drone.assign_schedule(port=self.port,client=self.client,choice = choice)
             if drone.job_status['final_dest'] in [[-8.5, 5, -5], [-9, -4, -5], [-4, 10, -5], [-3, -7, -5], [2, 8, -5], [4, -6.5, -5]]:
                 self.test_land_queue.append(drone)
@@ -129,7 +132,7 @@ class environment(gym.Env):
             self.move_position(drone.drone_name,initial_des,join=0)
         self.update_all()
 
-    def step(self,action):
+    def step(self, action):
         
         start_time = time.time()
         self.Try_selecting_drone_from_Start()
@@ -167,17 +170,20 @@ class environment(gym.Env):
            # self.uam_time_update(self.current_drone,coded_action['action'])
             
         elif coded_action["action"] == "takeoff":
-            
-            new_position = coded_action["position"]
-            self.complete_takeoff(self.current_drone.drone_name, new_position)
-            old_position = self.current_drone.current_location
-            # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
-            # self.current_drone.update_battery(reduce) #Ditto
-            self.current_drone.set_status("in-action", "in-destination")
-            self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
-            self.current_drone.job_status["final_dest"] = new_position
-         #   self.uam_time_update(self.current_drone,coded_action['action'])
-            #need to calculate reward but how
+
+            if self.noise and np.random.uniform() < self.noise_percent:
+                pass
+            else:
+                new_position = coded_action["position"]
+                self.complete_takeoff(self.current_drone.drone_name, new_position)
+                old_position = self.current_drone.current_location
+                # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
+                # self.current_drone.update_battery(reduce) #Ditto
+                self.current_drone.set_status("in-action", "in-destination")
+                self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
+                self.current_drone.job_status["final_dest"] = new_position
+            #   self.uam_time_update(self.current_drone,coded_action['action'])
+                #need to calculate reward but how
             
 
             # self.current_drone.set_status('in-air','in-destination') #Not sure about this one
@@ -194,27 +200,33 @@ class environment(gym.Env):
         #    self.uam_time_update(self.current_drone,coded_action['action'])
         
         elif coded_action['action'] == 'takeoff-hover':
-            new_position = coded_action["position"]
-            self.complete_takeoff_hover(self.current_drone.drone_name,new_position)
-            old_position = self.current_drone.current_location
-            # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
-            # self.current_drone.update_battery(reduce) #Ditto
-            self.current_drone.status = self.current_drone.all_states['in-air']
-            self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
-            self.current_drone.job_status["final_dest"] = new_position
+            if self.noise and np.random.uniform() < self.noise_percent:
+                pass
+            else:
+                new_position = coded_action["position"]
+                self.complete_takeoff_hover(self.current_drone.drone_name,new_position)
+                old_position = self.current_drone.current_location
+                # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
+                # self.current_drone.update_battery(reduce) #Ditto
+                self.current_drone.status = self.current_drone.all_states['in-air']
+                self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
+                self.current_drone.job_status["final_dest"] = new_position
 
 
         elif coded_action['action'] == 'move-b':
-            new_position = coded_action["position"]
-            self.change_port(self.current_drone.drone_name, new_position)
-            old_position = self.current_drone.current_location            
-            # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
-            # self.current_drone.update_battery(reduce) #Ditto
-            self.current_drone.job_status['final_dest'] = new_position
-            self.current_drone.status_to_set = self.current_drone.all_states['battery-port']
-            self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
-            self.current_drone.job_status["final_dest"] = new_position
-    #        self.uam_time_update(self.current_drone,coded_action['action'])
+            if self.noise and np.random.uniform() < self.noise_percent:
+                pass
+            else:
+                new_position = coded_action["position"]
+                self.change_port(self.current_drone.drone_name, new_position)
+                old_position = self.current_drone.current_location            
+                # reduce = self.current_drone.calculate_reduction(old_position,new_position) #Ditto
+                # self.current_drone.update_battery(reduce) #Ditto
+                self.current_drone.job_status['final_dest'] = new_position
+                self.current_drone.status_to_set = self.current_drone.all_states['battery-port']
+                self.current_drone.job_status["initial_loc"] = self.current_drone.current_location
+                self.current_drone.job_status["final_dest"] = new_position
+        #        self.uam_time_update(self.current_drone,coded_action['action'])
 
         elif coded_action["action"] == "stay":
             if self.current_drone.status == self.current_drone.all_states["in-air"]:
@@ -258,7 +270,7 @@ class environment(gym.Env):
             return self.test_reward, self.collisions, self.total_delay, self.good_takeoffs, self.good_landings, self.test_battery / self.total_timesteps, self.test_step
         elif self.total_timesteps == (432000 / self.clock_speed):
             self.done = done = True
-        info = {}
+        info = {"action":action}
         #todo
         #update all the drones
         self.step_time = time.time() - start_time
@@ -282,11 +294,16 @@ class environment(gym.Env):
         
         
     def move_position(self, drone_name, position,join=0):
+        if self.noise and np.random.uniform() < self.noise_percent:
+            velocity = 1 - np.random.uniform()
+            # print(velocity)
+        else:
+            velocity = 1
         if join == 0:
-            self.client.moveToPositionAsync(position[0],position[1],position[2], velocity=1,timeout_sec=15, vehicle_name=drone_name)
+            self.client.moveToPositionAsync(position[0],position[1],position[2], velocity=velocity,timeout_sec=15, vehicle_name=drone_name)
             #self.client.hoverAsync(vehicle_name=drone_name)
         else:
-            self.client.moveToPositionAsync(position[0],position[1],position[2], velocity=1,timeout_sec=15, vehicle_name=drone_name).join()
+            self.client.moveToPositionAsync(position[0],position[1],position[2], velocity=velocity,timeout_sec=15, vehicle_name=drone_name).join()
             #self.client.hoverAsync( vehicle_name=drone_name)
             
     def complete_landing(self, drone_name, location):        
@@ -449,11 +466,11 @@ class environment(gym.Env):
 
         safety = self.calculate_safety_2(action)
 
-        w1 += 0.5 / 10 # 3rd most important
-        w2 += 0.5 / 10 # 3rd most important
-        w3 += 1 / 10 # 2nd most important
+        w1 += 1 / 10 # 3rd most important
+        w2 += 1 / 10 # 3rd most important
+        w3 += 1.5 / 10 # 2nd most important
         w4 -= 1 / 10  # 4th most important
-        w5 += 2 / 10  # Most important
+        w5 += 1.5 / 10  # Most important
 
         formula = w1*gamma + w2*Tau + w3*lambda_ + w4*beta_ + w5*safety
 
@@ -666,7 +683,7 @@ class environment(gym.Env):
             i.current_location = loc
             i.drone_locs[self.all_drones.index(i)] = loc
             self.env_time = (time.time() - self.start_time) * self.clock_speed
-            i.update(loc,self.client,self.port,self.env_time)
+            i.update(loc,self.client,self.port,self.env_time, self.noise)
             i.get_state_status()
             self.tasks_completed += i.tasks_completed
             self.avg_battery += i.battery_remaining

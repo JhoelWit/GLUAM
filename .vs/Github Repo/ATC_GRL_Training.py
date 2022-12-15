@@ -1,3 +1,4 @@
+from datetime import datetime
 import numpy as np
 import gym
 import torch
@@ -14,7 +15,8 @@ import matplotlib.pyplot as plt
 import random
 import os
 
-
+# seed = np.random.randint(0, 1000)
+seed = 683 #For reproducibility
 # policy_kwargs = dict(
 #     features_extractor_class = CustomGLPolicy,
 #     features_extractor_kwargs=dict(
@@ -70,21 +72,23 @@ class TensorboardCallback(BaseCallback):
                 print("Saving model checkpoint to {}".format(path))
         return True #No need to experiment with early stopping yet
 
-custom_callback = TensorboardCallback(ep_len = 1439, log_freq= 10_000, save_freq=10_000, save_path='./ATC_Model/',
-                                         name_prefix='ATC_GRL_Model_9_14_22') 
+current_date_time = datetime.now()
+timestamp = current_date_time.strftime("%H_%M_%S")
+custom_callback = TensorboardCallback(ep_len = 1439, log_freq= 10_000, save_freq=10_000, save_path='./ATC_Model/'+str(seed)+'_' + timestamp + '/',
+                                         name_prefix='ATC_GRL_Model') 
        
 # env = DummyVecEnv([lambda: environment(5)])
 # env = SubprocVecEnv([lambda: environment(5)])
-
-env = environment(no_of_drones=4, type="graph")
+env = environment(no_of_drones=4, type="graph", noise=True)
+env.seed(seed)
 
 #Loading a model to continue training
-# model = PPO.load("ATC_Model/ATC_GRL_Model_9_11_22_690000_steps", env=env, verbose=1, n_steps=20_000,batch_size=10_000,gamma=1,learning_rate=0.00001, tensorboard_log='ATC_GRL_Model/', device="cuda")
-# model.learn(total_timesteps=2_000_000, callback=custom_callback, reset_num_timesteps=False)
+# model = PPO.load("ATC_Model/ATC_GRL_Model_02_05_30_300000_seed_347_steps", env=env, verbose=1, n_steps=30_000,batch_size=15_000,gamma=1,learning_rate=1e-5,ent_coef=0.001,tensorboard_log='ATC_GRL_Model/', device="cuda")
+# model.learn(total_timesteps=1_000_000, callback=custom_callback, reset_num_timesteps=False)
 
-model = PPO(CustomGLPolicy,env=env,tensorboard_log='ATC_GRL_Model/',verbose=1,n_steps=20_000,batch_size=10_000,gamma=1,learning_rate=0.00001,device='cuda')
-model.learn(total_timesteps=2_000_000, callback=custom_callback)
-model.save("Final_ATC_GRL_model_9_13_22")
+model = PPO(CustomGLPolicy,env=env,tensorboard_log='ATC_GRL_Model/',verbose=1,n_steps=20_000,batch_size=10_000,gamma=1,learning_rate=1e-5,ent_coef=0.001,device='cuda')
+model.learn(total_timesteps=300_000, callback=custom_callback)
+model.save("ATC_Model/"+str(seed)+"_" + timestamp + "/Final_ATC_GRL_model")
 
 
 

@@ -1,3 +1,4 @@
+from datetime import datetime
 import numpy as np
 import gym
 import torch
@@ -56,18 +57,20 @@ class TensorboardCallback(BaseCallback):
                 print("Saving model checkpoint to {}".format(path))
         return True #No need to experiment with early stopping yet
 
+current_date_time = datetime.now()
+timestamp = current_date_time.strftime("%H_%M_%S")
 custom_callback = TensorboardCallback(ep_len = 1439,log_freq= 10000, save_freq=10000, save_path='./ATC_Model/',
-                                         name_prefix='ATC_RL_Model_9_14_22') 
+                                         name_prefix='ATC_RL_Model_'+timestamp) 
 
 # env = DummyVecEnv([lambda: environment(5)])
 # env = SubprocVecEnv([lambda: environment(5)])
 
-env = environment(no_of_drones=4, type="regular")
+env = environment(no_of_drones=4, type="regular", noise=True)
 
 #Loading a model to continue training
 model = PPO.load("ATC_Model/ATC_RL_Model_9_11_22_430000_steps", env=env, verbose=1, n_steps=20_000,batch_size=10_000,gamma=1,learning_rate=0.00001, tensorboard_log='ATC_RL_Model/', device="cuda")
-model.learn(total_timesteps=2_000_000, callback=custom_callback, reset_num_timesteps=False)
+model.learn(total_timesteps=1_000_000, callback=custom_callback, reset_num_timesteps=False)
 
 # model = PPO(CustomBaselinePolicy,env=env,tensorboard_log='ATC_RL_Model/',verbose=1,n_steps=20000,batch_size=10000,gamma=1,learning_rate=0.00001,device='cuda')
 # model.learn(total_timesteps=2_000_000,callback=custom_callback)
-model.save("Final_ATC_RL_model_9_14_22")
+model.save("Final_ATC_RL_model_" + timestamp)

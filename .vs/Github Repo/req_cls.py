@@ -224,6 +224,7 @@ class ports:
 
 class UAMs:
     def __init__(self, drone_name,offset):
+        self.noise_percent = 0.05
         self.drone_name = drone_name
         self.drone_no = drone_name # use split and get the drone number alone
         self.velocity = 1 # 1 m/s
@@ -320,7 +321,11 @@ class UAMs:
         else:
             self.in_portzone = False
     
-    def update(self, current_loc, client,port,env_time):
+    def update(self, current_loc, client,port,env_time, noise=False):
+        if noise and np.random.uniform() < self.noise_percent:
+            velocity = 1 - np.random.uniform()
+        else:
+            velocity = 1
         self.upcoming_schedule["time"] = env_time
         self.env_time = env_time
         # print(self.env_time)
@@ -336,7 +341,7 @@ class UAMs:
                     self.tasks_completed += 1
                 else:
                     final_pos = self.job_status['final_dest']
-                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=velocity, vehicle_name=self.drone_name)
 
             elif self.status_to_set == self.all_states['battery-port']:
                 dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1])
@@ -344,10 +349,13 @@ class UAMs:
                     client.landAsync(vehicle_name = self.drone_name)
                     self.in_battery_port = 1
                     self.set_status('battery-port','in-action')
-                    self.battery_remaining += 10
+                    if noise and np.random.uniform() < self.noise_percent:
+                        self.battery_remaining += 0
+                    else:
+                        self.battery_remaining += 10
                 else:
                     final_pos = self.job_status['final_dest']
-                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=velocity, vehicle_name=self.drone_name)
                     time.sleep(self.sleep_time)
 
             elif self.status_to_set == self.all_states['in-air']:
@@ -361,7 +369,7 @@ class UAMs:
                     self.set_status('in-air','in-action')
                 else:
                     final_pos = self.job_status['final_dest']
-                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=velocity, vehicle_name=self.drone_name)
                     time.sleep(self.sleep_time)
             elif self.status_to_set == self.all_states['in-port']:
                 dist = self._calculate_distance(current_loc[:-1],self.job_status['final_dest'][:-1])
@@ -369,7 +377,7 @@ class UAMs:
                     self.set_status('in-port','in-action')
                 else:
                     final_pos = self.job_status['final_dest']
-                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+                    client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=velocity, vehicle_name=self.drone_name)
                     time.sleep(self.sleep_time)
 
         elif self.status == self.all_states['battery-port']:
@@ -377,7 +385,10 @@ class UAMs:
                 self.battery_remaining = 100
                 self.set_status('battery-port','in-action')
             else:
-                self.battery_remaining += 10
+                if noise and np.random.uniform() < 0.2:
+                    self.battery_remaining += 0
+                else:
+                    self.battery_remaining += 10
 
         elif self.status == self.all_states['in-port']:
 
@@ -391,7 +402,7 @@ class UAMs:
             self.port_identification = {'type':'hover','port_no':port.hover_spots.index(self.job_status['final_dest'])}
             des = self.job_status['final_dest']
             final_pos = self.get_final_pos(des, self.offset)
-            client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=1, vehicle_name=self.drone_name)
+            client.moveToPositionAsync(final_pos[0],final_pos[1],final_pos[2], velocity=velocity, vehicle_name=self.drone_name)
             time.sleep(self.sleep_time)
             self.set_status('in-action','in-air')
         

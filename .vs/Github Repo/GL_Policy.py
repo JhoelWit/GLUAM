@@ -33,6 +33,7 @@ class CustomGLPolicy(BasePolicy):
                 squash_output: bool = False,
                 ortho_init: bool = True,
                 features_dim = 136,
+                features_hidden = 136,
                 features_extractor_kwargs: Optional[Dict[str, Any]] = None,
                 optimizer_class: Type[torch.optim.Optimizer] = torch.optim.Adam,
                 optimizer_kwargs: Optional[Dict[str, Any]] = None
@@ -47,7 +48,7 @@ class CustomGLPolicy(BasePolicy):
                                             )
 
         self.features_extractor = GNNFeatureExtractor()
-        value_net_net = [nn.Linear(features_dim, features_dim, bias=True),nn.LeakyReLU(),nn.Linear(features_dim, features_dim, bias=True), nn.LeakyReLU(), nn.Linear(features_dim, features_dim, bias=True),nn.Linear(features_dim, 1, bias=True)]
+        value_net_net = [nn.Linear(features_dim, features_hidden, bias=True),nn.RReLU(0.1, 0.3),nn.Linear(features_hidden, features_hidden, bias=True), nn.RReLU(0.1, 0.3), nn.Linear(features_hidden, features_hidden, bias=True),nn.Linear(features_hidden, 1, bias=True)]
         self.value_net = nn.Sequential(*value_net_net)
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
         self.action_dist = make_proba_distribution(action_space,use_sde=use_sde)
@@ -162,12 +163,18 @@ class GNNFeatureExtractor(nn.Module):
 class GCN(nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels) -> None:
         super().__init__()
+        self.gcn_layer1_prev = None
+        self.gcn_layer2_prev = None
+        self.gcn_layer3_prev = None
+        self.gcn_layer4_prev = None
         self.in_channels = in_channels
+        self.out_channels = out_channels
         self.conv1 = GCNConv(in_channels, hidden_channels)
         self.conv2 = GCNConv(hidden_channels, hidden_channels)
         self.conv3 = GCNConv(hidden_channels, hidden_channels)
         self.conv4 = GCNConv(hidden_channels, out_channels)
         self.Leaky_ReLU = nn.LeakyReLU(negative_slope=0.1)
+        self.RRelu = nn.RReLU(lower=0.1, upper=0.3)
         self.BatchNorm = BatchNorm(in_channels,track_running_stats=True) #Supposedly works the same as BatchNorm1d
 
     def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
@@ -176,13 +183,23 @@ class GCN(nn.Module):
 
 
         # x = self.BatchNorm(x) #Acting weird with batches, ironically
-        x = self.conv1(x, edge_index)
-        x = self.Leaky_ReLU(x)
-        x = self.conv2(x, edge_index)
-        x = self.Leaky_ReLU(x)
-        x = self.conv3(x, edge_index)
-        x = self.Leaky_ReLU(x)
-        x = self.conv4(x, edge_index)
+
+        x = self.gcn_layer1_prev = self.conv1(x, edge_index) 
+        x = self.RRelu(x)
+        x = self.gcn_layer2_prev = self.conv2(x, edge_index) + self.gcn_layer1_prev 
+        x = self.RRelu(x)
+        x = self.gcn_layer3_prev = self.conv3(x, edge_index) + self.gcn_layer2_prev
+        x = self.RRelu(x)
+        x = self.conv4(x, edge_index) + self.gcn_layer3_prev[:,:,:self.out_channels]
+
+
+        # x = self.conv1(x, edge_index) 
+        # x = self.Leaky_ReLU(x)
+        # x = self.conv2(x, edge_index)
+        # x = self.Leaky_ReLU(x)
+        # x = self.conv3(x, edge_index)
+        # x = self.Leaky_ReLU(x)
+        # x = self.conv4(x, edge_index)
         # print('x without pooling',x.shape)
 
         #Pooling for the graph embedding, just a mean pool
@@ -199,6 +216,7 @@ class GRLMLP(nn.Module):
         self.hidden_layer2 = nn.Linear(hidden1,hidden2)
         self.output = nn.Linear(hidden2,output_dim)
         self.Leaky_ReLU = nn.LeakyReLU(negative_slope=0.1)
+        self.RRelu = nn.RReLU(lower=0.1, upper=0.3)
         self.tanh = nn.Tanh()
 
     def forward(self, x, mask=None):
@@ -209,14 +227,16 @@ class GRLMLP(nn.Module):
  
         #Forward propogation
         h1 = self.input(x)
-        l1 = self.tanh(h1)
+        # l1 = self.tanh(h1)
+        l1 = self.RRelu(h1)
 
         h2 = self.hidden_layer(l1)
-        # l2 = self.Leaky_ReLU(h2)
-        l2 = self.tanh(h2)
+        l2 = self.RRelu(h2)
+        # l2 = self.tanh(h2)
 
         h3 = self.hidden_layer2(l2)
-        l3 = self.tanh(h3)
+        # l3 = self.tanh(h3)
+        l3 = self.RRelu(h3)
 
         # print('mask',mask)
         ypred = self.output(l3)
